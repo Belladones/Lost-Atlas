@@ -19,7 +19,7 @@ npm test
 npm run build
 ```
 
-Les tests couvrent les mentions, l’authentification, l’isolation des bibliothèques, la validation, les conflits de sauvegarde, les sessions expirées, les requêtes intersites, la limitation des tentatives et la persistance après redémarrage, la validation des images, leur confidentialité et leur sauvegarde.
+Les tests couvrent les mentions, l’authentification, l’isolation des bibliothèques, la validation, les conflits de sauvegarde, les sessions expirées, les requêtes intersites, la limitation des tentatives et la persistance après redémarrage, la validation des images, leur confidentialité et leur sauvegarde, ainsi que les points de vue relationnels et la géométrie du graphe.
 
 ## Stockage et utilisateurs
 
@@ -81,6 +81,23 @@ Dans l’onglet **Images** des fiches, ajoutez un portrait, une couverture et ju
 Formats : **JPG, PNG, WebP**, 3 Mo et 25 mégapixels maximum par fichier. Le serveur vérifie le décodage, corrige l’orientation, retire les métadonnées, limite les dimensions à 2 000 pixels et stocke une version WebP. Les fichiers restent privés, servis uniquement à leur propriétaire et sans cache partagé. Les images sont stockées en BLOB dans la même base SQLite : la sauvegarde serveur les inclut automatiquement, sans dossier média à gérer.
 
 Chaque compte dispose de 50 Mo de stockage d’images compressées. Les doublons sont réutilisés au sein d’un compte. Lors de l’import d’une nouvelle image, le serveur supprime les fichiers non référencés dont le dernier import remonte à plus de sept jours. Une image ancienne retirée d’un projet peut donc être purgée au prochain import. Le quota compte aussi les fichiers temporaires issus d’un import interrompu. Les images encore référencées dans les projets sont conservées. Les exports JSON emportent uniquement les images réellement utilisées par les projets exportés.
+
+## Relations à deux points de vue et graphe global
+
+Dans **Relations**, créez ou modifiez un lien en choisissant les fiches A et B, sa nature et deux explications indépendantes :
+
+- **A → B** : ce que A ressent envers B, ses attentes, sa confiance ou ses secrets.
+- **B → A** : le point de vue de B sur A. Il peut être complètement différent.
+
+Par exemple : Cassie est amoureuse de Léo, alors que Léo la considère comme une amie. Un point de vue peut rester vide. Le bouton d’inversion échange les fiches **et** leurs explications pour préserver leur sens. Les anciennes relations sont conservées ; leurs explications restent vides tant que vous ne les complétez pas. Modifier un lien ne le duplique pas.
+
+Dans la fiche d’un personnage, **Liens & mentions** présente les deux côtés, en affichant d’abord son propre point de vue. Vous pouvez ouvrir l’autre fiche ou modifier la relation sur place. Les nouvelles explications sont sauvegardées sur le serveur et conservées dans les exports/imports JSON.
+
+Le **Graphe global** montre toutes les fiches du projet actif (personnages, lieux et organisations), y compris celles sans relation. Chaque lien comporte deux flèches : trait plein pour A → B, pointillé pour B → A. Cliquez sur un lien pour consulter ses deux explications dans le panneau latéral, ou sur une fiche pour explorer ses connexions et l’ouvrir. Les relations parallèles et les liens sur soi-même sont dessinés séparément.
+
+Déplacez les nœuds ou le fond, utilisez les boutons de zoom, **Afficher tout le graphe** ou **Centrer sur la sélection**. Le graphe peut aussi être parcouru au clavier : Tab pour sélectionner un élément, Entrée/Espace pour l’activer, +/−/0 lorsque le fond a le focus pour zoomer ou recadrer. La recherche met les fiches en évidence sans masquer le reste du graphe. Les positions et le cadrage sont temporaires : ils ne modifient pas les projets et se réinitialisent lors d’un changement de structure, de taille d’écran ou de vue.
+
+La **Liste détaillée** affiche les deux points de vue côte à côte (ou l’un sous l’autre sur mobile), avec recherche dans les noms, la nature des liens et leurs explications. Les actions d’édition et de suppression restent accessibles. Supprimer une fiche retire automatiquement ses relations du graphe.
 
 ## Supprimer des éléments
 
