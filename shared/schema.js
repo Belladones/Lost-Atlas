@@ -8,7 +8,7 @@ const project=z.object({id,name:z.string().trim().min(1).max(150),genre:z.string
  if(entities.size!==p.entities.length||new Set(p.chapters.map(c=>c.id)).size!==p.chapters.length)ctx.addIssue({code:'custom',message:'Identifiants dupliqués.'});
  if(p.relations.some(r=>!entities.has(r.from)||!entities.has(r.to)))ctx.addIssue({code:'custom',message:'Relation vers une fiche inconnue.'});
 });
-export const librarySchema=z.object({projects:z.array(project).min(1).max(100),active:id}).superRefine((d,ctx)=>{
- if(new Set(d.projects.map(p=>p.id)).size!==d.projects.length||!d.projects.some(p=>p.id===d.active))ctx.addIssue({code:'custom',message:'Projet actif invalide ou identifiants dupliqués.'});
+export const librarySchema=z.object({projects:z.array(project).max(100),active:id.nullable()}).superRefine((d,ctx)=>{
+ if(new Set(d.projects.map(p=>p.id)).size!==d.projects.length||(d.projects.length?!d.projects.some(p=>p.id===d.active):d.active!==null))ctx.addIssue({code:'custom',message:'Projet actif invalide ou identifiants dupliqués.'});
 });
 export const credentialsSchema=z.object({email:z.email().max(254).transform(s=>s.toLowerCase()),password:z.string().min(12).max(256),name:z.string().trim().min(1).max(100).optional()});

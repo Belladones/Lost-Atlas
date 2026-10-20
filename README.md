@@ -59,8 +59,19 @@ DATABASE_PATH=/chemin/persistant/atlas.sqlite npm run backup -- /chemin/protege/
 
 Le script utilise l’API de sauvegarde SQLite pour une copie cohérente même quand le serveur tourne. Il refuse d’écraser un fichier existant. Le fichier contient les données de tous les comptes : limitez son accès et conservez une copie hors de la machine. Pour restaurer, arrêtez le serveur, conservez une copie de la base actuelle et de ses fichiers WAL/SHM, puis remplacez la base par la sauvegarde avant de redémarrer.
 
+## Supprimer des éléments
+
+- Fiche (personnage, lieu, organisation) : ouvrez-la puis choisissez **Supprimer cette fiche**. Ses relations sont retirées automatiquement ; le texte des chapitres reste intact et les anciennes mentions redeviennent du texte simple.
+- Chapitre : utilisez la corbeille dans la liste ou dans la barre de l’éditeur. Les autres chapitres et les fiches sont conservés.
+- Relation : utilisez sa corbeille dans Relations ; les deux fiches restent présentes.
+- Projet : ouvrez **Ma bibliothèque** puis utilisez la corbeille à côté du projet. Tous ses chapitres, fiches et relations sont supprimés.
+
+Chaque suppression demande confirmation et propose d’exporter le projet au préalable. Elle est définitive après enregistrement sur le serveur, sans corbeille de récupération. Le dernier projet peut être supprimé : la bibliothèque reste vide et permet de créer un projet ou d’importer une sauvegarde. Les données des autres comptes restent inchangées.
+
+L’interface utilise une direction artistique nocturne : charbon, ivoire, titrage éditorial et motifs célestes, sur ordinateur comme sur mobile.
+
 ## Périmètre actuel
 
 Il n’existe pas encore de validation d’email, récupération de mot de passe par email, gestion administrative des utilisateurs, partage entre auteurs, historique des versions ni galerie de médias. L’inscription est ouverte : configurez l’accès au site selon votre usage avant de l’exposer publiquement.
 
-Les mentions sont détectées dynamiquement en lecture et ouvrent une fiche par son identifiant. Après un changement de nom, conservez l’ancien nom dans les alias. Les références persistantes d’un éditeur riche restent une prochaine étape. Les illustrations sont en CSS ; les polices distantes sont facultatives avec repli local. Aucun manuscrit n’est transmis à un service d’IA.
+Les mentions sont détectées dynamiquement en lecture et ouvrent une fiche par son identifiant. Après un changement de nom, conservez l’ancien nom dans les alias. Les références persistantes d’un éditeur riche restent une prochaine étape. Les illustrations sont en CSS et les polices utilisent les familles disponibles sur votre appareil, sans chargement externe. Aucun manuscrit n’est transmis à un service d’IA.

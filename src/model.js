@@ -15,3 +15,18 @@ export function mentionParts(text,entities){
  const re=new RegExp('(?<![\\p{L}\\p{N}_])('+escaped.join('|')+')(?![\\p{L}\\p{N}_])','giu');
  const out=[];let last=0;for(const m of text.matchAll(re)){if(m.index>last)out.push({text:text.slice(last,m.index)});out.push({text:m[0],id:names.find(n=>n.name.toLocaleLowerCase()===m[0].toLocaleLowerCase()).id});last=m.index+m[0].length;}if(last<text.length)out.push({text:text.slice(last)});return out;
 }
+
+// All removals preserve unrelated projects and manuscript text.
+export function removeItem(library,target){
+ if(target.kind==='project'){
+  const projects=library.projects.filter(p=>p.id!==target.projectId);
+  return {...library,projects,active:projects.some(p=>p.id===library.active)?library.active:projects[0]?.id??null};
+ }
+ return {...library,projects:library.projects.map(p=>{
+  if(p.id!==target.projectId)return p;
+  if(target.kind==='entity')return {...p,entities:p.entities.filter(e=>e.id!==target.id),relations:p.relations.filter(r=>r.from!==target.id&&r.to!==target.id)};
+  if(target.kind==='chapter')return {...p,chapters:p.chapters.filter(c=>c.id!==target.id)};
+  if(target.kind==='relation')return {...p,relations:p.relations.filter((_,i)=>i!==target.index)};
+  return p;
+ })};
+}

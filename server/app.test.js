@@ -60,3 +60,10 @@ test('les comptes, sessions et projets survivent au redémarrage du serveur',asy
 test('deux inscriptions simultanées ne créent pas de doublon',async t=>{
  const {register}=await setup(t);const results=await Promise.all([register(),register()]);assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
 });
+test('la suppression du dernier projet reste persistante et privée',async t=>{
+ const {request,register}=await setup(t);const a=await register('empty@example.test'),b=await register('other@example.test');
+ const saved=await request('/api/library',{cookie:a.cookie,method:'PUT',body:{data:{projects:[],active:null},revision:0}});assert.equal(saved.status,200);
+ const loaded=await request('/api/library',{cookie:a.cookie});assert.deepEqual(loaded.body.data,{projects:[],active:null});
+ assert.equal((await request('/api/library',{cookie:b.cookie})).body.data.projects.length,1);
+ assert.equal((await request('/api/library',{cookie:a.cookie,method:'PUT',body:{data:initial,revision:loaded.body.revision}})).status,200);
+});
