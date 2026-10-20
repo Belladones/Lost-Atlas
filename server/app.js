@@ -1,0 +1,84 @@
+import {createServer} from 'node:http';
+import {DatabaseSync} from 'node:sqlite';
+import {randomBytes,randomUUID,scrypt as scryptCallback,timingSafeEqual,createHash} from 'node:crypto';
+import {promisify} from 'node:util';
+import {mkdirSync,readFileSync,existsSync,statSync} from 'node:fs';
+import {dirname,resolve,extname,sep} from 'node:path';
+import {initial} from '../src/model.js';
+import {credentialsSchema,librarySchema} from '../shared/schema.js';
+const scrypt=promisify(scryptCallback);
+const digest=s=>createHash('sha256').update(s).digest('hex');
+const DAY=86400000;
+export function createApp({dbPath=resolve('data/lost-atlas.sqlite'),production=false,appOrigin,dist=resolve('dist'),now=Date.now}={}){
+ if(dbPath!==':memory:')mkdirSync(dirname(dbPath),{recursive:true,mode:0o700});
+ const db=new DatabaseSync(dbPath);
+ db.exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
+ CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL, name TEXT NOT NULL, password_hash TEXT NOT NULL, created_at INTEGER NOT NULL);
+ CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL);
+ CREATE TABLE IF NOT EXISTS libraries (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, body TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL);
+ CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);`);
+ const attempts=new Map();
+ const cookie=(token,maxAge)=>`atlas_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${production?'; Secure':''}`;
+ function session(req){const token=req.headers.cookie?.split(';').map(s=>s.trim()).find(s=>s.startsWith('atlas_session='))?.slice(14);if(!token)return null;return db.prepare('SELECT users.id,users.email,users.name FROM sessions JOIN users ON users.id=sessions.user_id WHERE token_hash=? AND expires_at>?').get(digest(token),now());}
+ function openSession(res,userId){const token=randomBytes(32).toString('hex');db.prepare('DELETE FROM sessions WHERE expires_at<=?').run(now());db.prepare('INSERT INTO sessions VALUES (?,?,?)').run(digest(token),userId,now()+7*DAY);res.setHeader('Set-Cookie',cookie(token,7*86400));}
+ function json(res,status,body){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(body));}
+ async function body(req){let size=0,chunks=[];for await(const chunk of req){size+=chunk.length;if(size>5*1024*1024)throw {status:413,message:'Bibliothèque trop volumineuse (limite : 5 Mo).'};chunks.push(chunk);}try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw {status:400,message:'JSON invalide.'};}}
+ const server=createServer(async(req,res)=>{
+  res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options','DENY');
+  try{
+   const url=new URL(req.url,'http://localhost');const path=url.pathname;
+   if(path.startsWith('/api/')){
+    if(!['GET','HEAD','OPTIONS'].includes(req.method)){
+     if(req.headers['sec-fetch-site']==='cross-site')return json(res,403,{error:'Origine non autorisée.'});
+     if(req.headers.origin){const expected=appOrigin||`${production?'https':'http'}://${req.headers.host}`;if(req.headers.origin!==expected)return json(res,403,{error:'Origine non autorisée.'});}
+     if(req.method!=='DELETE'&&!req.headers['content-type']?.startsWith('application/json'))return json(res,415,{error:'Content-Type application/json requis.'});
+    }
+    if(path==='/api/health'&&req.method==='GET'){db.prepare('SELECT 1').get();return json(res,200,{status:'ok'});}
+    if(['/api/auth/register','/api/auth/login'].includes(path)&&req.method==='POST'){
+     const key=req.socket.remoteAddress;let bucket=attempts.get(key);if(!bucket||bucket.until<=now()){bucket={count:0,until:now()+15*60000};attempts.set(key,bucket);}if(++bucket.count>20){res.setHeader('Retry-After',Math.ceil((bucket.until-now())/1000));return json(res,429,{error:'Trop de tentatives. Réessayez dans 15 minutes.'});}
+     if(attempts.size>10000)for(const [k,v]of attempts)if(v.until<=now())attempts.delete(k);
+     const parsed=credentialsSchema.safeParse(await body(req));if(!parsed.success)return json(res,400,{error:'Indiquez un email valide et un mot de passe de 12 à 256 caractères.'});
+     const {email,password,name}=parsed.data;let user=db.prepare('SELECT * FROM users WHERE email=?').get(email);
+     if(path.endsWith('register')){
+      if(!name)return json(res,400,{error:'Le nom est obligatoire.'});
+      // Hash even for an existing address to avoid a fast duplicate-account response.
+      const salt=randomBytes(16).toString('hex');const hash=(await scrypt(password,salt,64)).toString('hex');
+      if(user)return json(res,409,{error:'Impossible de créer ce compte. Essayez de vous connecter.'});
+      user={id:randomUUID(),email,name};
+      db.exec('BEGIN');try{db.prepare('INSERT INTO users VALUES (?,?,?,?,?)').run(user.id,email,name,`${salt}:${hash}`,now());db.prepare('INSERT INTO libraries VALUES (?,?,0,?)').run(user.id,JSON.stringify(initial),now());db.exec('COMMIT');}catch(e){db.exec('ROLLBACK');if(e.code?.includes('CONSTRAINT')||(e.errcode&255)===19)return json(res,409,{error:'Impossible de créer ce compte.'});throw e;}
+     }else{
+      const [salt,expected]=(user?.password_hash||`${'0'.repeat(32)}:${'0'.repeat(128)}`).split(':');const actual=await scrypt(password,salt,64);
+      if(!user||!timingSafeEqual(actual,Buffer.from(expected,'hex')))return json(res,401,{error:'Email ou mot de passe incorrect.'});
+     }
+     openSession(res,user.id);return json(res,200,{user:{id:user.id,email:user.email,name:user.name}});
+    }
+    const user=session(req);if(!user)return json(res,401,{error:'Connectez-vous pour accéder à votre atelier.'});
+    if(path==='/api/auth/me'&&req.method==='GET')return json(res,200,{user});
+    if(path==='/api/auth/logout'&&req.method==='POST'){
+     const token=req.headers.cookie?.split(';').map(s=>s.trim()).find(s=>s.startsWith('atlas_session='))?.slice(14);
+     if(token)db.prepare('DELETE FROM sessions WHERE token_hash=?').run(digest(token));res.setHeader('Set-Cookie',cookie('',0));return json(res,200,{ok:true});
+    }
+    if(path==='/api/library'&&req.method==='GET'){const row=db.prepare('SELECT body,revision FROM libraries WHERE user_id=?').get(user.id);return json(res,200,{data:JSON.parse(row.body),revision:row.revision});}
+    if(path==='/api/library'&&req.method==='PUT'){
+     const input=await body(req);const parsed=librarySchema.safeParse(input?.data);
+     if(!parsed.success||!Number.isSafeInteger(input?.revision)||input.revision<0)return json(res,400,{error:'Bibliothèque invalide. Vérifiez les projets, fiches et relations.'});
+     const result=db.prepare('UPDATE libraries SET body=?, revision=revision+1, updated_at=? WHERE user_id=? AND revision=?').run(JSON.stringify(parsed.data),now(),user.id,input.revision);
+     if(!result.changes)return json(res,409,{error:'Votre bibliothèque a changé dans une autre fenêtre. Exportez votre travail puis rechargez la page.'});
+     return json(res,200,{revision:input.revision+1});
+    }
+    return json(res,404,{error:'Route inconnue.'});
+   }
+   if(!['GET','HEAD'].includes(req.method)){res.writeHead(405);return res.end();}
+   let target=resolve(dist,'.'+decodeURIComponent(path));
+   if(!target.startsWith(resolve(dist)+sep)&&target!==resolve(dist)){res.writeHead(404);return res.end();}
+   if(!existsSync(target)||!statSync(target).isFile()){
+    if(extname(path)){res.writeHead(404);return res.end();}target=resolve(dist,'index.html');
+   }
+   if(!existsSync(target)){res.writeHead(503);return res.end('Compilez le frontend avec npm run build.');}
+   const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.json':'application/json'};
+   res.writeHead(200,{'Content-Type':types[extname(target)]||'application/octet-stream','Cache-Control':extname(target)==='.html'?'no-cache':'public, max-age=3600'});res.end(req.method==='HEAD'?undefined:readFileSync(target));
+  }catch(error){if(!res.headersSent)json(res,error.status||500,{error:error.status?error.message:'Erreur du serveur. Réessayez plus tard.'});else res.end();}
+ });
+ server.on('close',()=>db.close());
+ return {server,db};
+}
