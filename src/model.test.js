@@ -27,3 +27,13 @@ test('supprimer une relation ne supprime aucune fiche',async()=>{
  const {removeItem}=await import('./model.js');const result=removeItem(initial,{kind:'relation',projectId:'meridian',index:0});
  assert.equal(result.projects[0].relations.length,1);assert.deepEqual(result.projects[0].entities,initial.projects[0].entities);
 });
+
+test('les anciennes fiches et les rôles libres restent compatibles avec les nouveaux champs',async()=>{
+ const {librarySchema}=await import('../shared/schema.js');assert.equal(librarySchema.safeParse(initial).success,true);
+ const data=structuredClone(initial);data.projects[0].entities[0].role='Gardienne des archives';data.projects[0].entities[0].character={age:'Immortelle',goal:'Retrouver les archives'};data.projects[0].entities[0].customFields=[{id:'a',label:'Devise',value:'Se souvenir'}];
+ const parsed=librarySchema.parse(data);assert.equal(parsed.projects[0].entities[0].role,'Gardienne des archives');assert.equal(parsed.projects[0].entities[0].character.age,'Immortelle');data.projects[0].entities[0].customFields.push({id:'a',label:'Autre',value:''});assert.equal(librarySchema.safeParse(data).success,false);
+});
+test('un import réattribue toutes les images sans altérer les textes et champs personnalisés',async()=>{
+ const {mediaIds,remapMedia}=await import('../shared/media.js');const data=structuredClone(initial),p=data.projects[0];p.coverImage='cover';p.chapters[0].coverImage='cover';p.entities[0].portraitImage='portrait';p.entities[0].coverImage='cover';p.entities[0].gallery=[{id:'gallery',caption:'Une idée'}];p.entities[0].customFields=[{id:'x',label:'Devise',value:'Ne pas oublier'}];
+ assert.deepEqual(mediaIds(data),['cover','portrait','gallery']);const imported=remapMedia(data,new Map([['cover','new-cover'],['portrait','new-portrait'],['gallery','new-gallery']]));assert.deepEqual(mediaIds(imported),['new-cover','new-portrait','new-gallery']);assert.deepEqual(imported.projects[0].entities[0].customFields,p.entities[0].customFields);assert.equal(imported.projects[0].chapters[0].text,p.chapters[0].text);assert.equal(p.entities[0].portraitImage,'portrait');
+});

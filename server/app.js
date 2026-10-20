@@ -1,3 +1,5 @@
+import sharp from 'sharp';
+import {mediaIds} from '../shared/media.js';
 import {createServer} from 'node:http';
 import {DatabaseSync} from 'node:sqlite';
 import {randomBytes,randomUUID,scrypt as scryptCallback,timingSafeEqual,createHash} from 'node:crypto';
@@ -9,13 +11,14 @@ import {credentialsSchema,librarySchema} from '../shared/schema.js';
 const scrypt=promisify(scryptCallback);
 const digest=s=>createHash('sha256').update(s).digest('hex');
 const DAY=86400000;
-export function createApp({dbPath=resolve('data/lost-atlas.sqlite'),production=false,appOrigin,dist=resolve('dist'),now=Date.now}={}){
+export function createApp({dbPath=resolve('data/lost-atlas.sqlite'),production=false,appOrigin,dist=resolve('dist'),now=Date.now,imageQuotaBytes=50*1024*1024}={}){
  if(dbPath!==':memory:')mkdirSync(dirname(dbPath),{recursive:true,mode:0o700});
  const db=new DatabaseSync(dbPath);
  db.exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
  CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL, name TEXT NOT NULL, password_hash TEXT NOT NULL, created_at INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS libraries (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, body TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL);
+ CREATE TABLE IF NOT EXISTS media (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, hash TEXT NOT NULL, body BLOB NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL, created_at INTEGER NOT NULL, UNIQUE(user_id,hash));
  CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);`);
  const attempts=new Map();
  const cookie=(token,maxAge)=>`atlas_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${production?'; Secure':''}`;
@@ -58,10 +61,41 @@ export function createApp({dbPath=resolve('data/lost-atlas.sqlite'),production=f
      const token=req.headers.cookie?.split(';').map(s=>s.trim()).find(s=>s.startsWith('atlas_session='))?.slice(14);
      if(token)db.prepare('DELETE FROM sessions WHERE token_hash=?').run(digest(token));res.setHeader('Set-Cookie',cookie('',0));return json(res,200,{ok:true});
     }
+    if(path==='/api/media'&&req.method==='POST'){
+     const input=await body(req);
+     if(typeof input?.data!=='string'||input.data.length>4*1024*1024||!input.data.length||! /^[A-Za-z0-9+/]+={0,2}$/.test(input.data))return json(res,400,{error:'Image invalide. Choisissez un fichier JPG, PNG ou WebP de 3 Mo maximum.'});
+     const bytes=Buffer.from(input.data,'base64');
+     if(bytes.length>3*1024*1024)return json(res,413,{error:'L’image dépasse la limite de 3 Mo.'});
+     const known=db.prepare('SELECT id,width,height FROM media WHERE user_id=? AND hash=?').get(user.id,createHash('sha256').update(bytes).digest('hex'));
+     if(known){db.prepare('UPDATE media SET created_at=? WHERE id=?').run(now(),known.id);return json(res,200,known);}
+     let normalized;
+     try{
+      const source=sharp(bytes,{limitInputPixels:25_000_000,animated:false});const metadata=await source.metadata();
+      if(!['jpeg','png','webp'].includes(metadata.format))return json(res,400,{error:'Formats acceptés : JPG, PNG et WebP.'});
+      normalized=await source.rotate().resize({width:2000,height:2000,fit:'inside',withoutEnlargement:true}).webp({quality:85}).toBuffer({resolveWithObject:true});
+     }catch{return json(res,400,{error:'Impossible de lire cette image. Vérifiez le fichier et sa taille (25 mégapixels maximum).'});}
+     if(normalized.data.length>3*1024*1024)return json(res,413,{error:'Cette image est trop volumineuse. Choisissez une version plus petite.'});
+     const hash=createHash('sha256').update(normalized.data).digest('hex');const existing=db.prepare('SELECT id,width,height FROM media WHERE user_id=? AND hash=?').get(user.id,hash);
+     if(existing){db.prepare('UPDATE media SET created_at=? WHERE id=?').run(now(),existing.id);return json(res,200,existing);}
+     // Keep recent unattached uploads for in-progress drafts, but reclaim old ones.
+     const library=JSON.parse(db.prepare('SELECT body FROM libraries WHERE user_id=?').get(user.id).body);const referenced=new Set(mediaIds(library));
+     for(const old of db.prepare('SELECT id FROM media WHERE user_id=? AND created_at<?').all(user.id,now()-7*DAY))if(!referenced.has(old.id))db.prepare('DELETE FROM media WHERE id=? AND user_id=?').run(old.id,user.id);
+     const used=db.prepare('SELECT COALESCE(SUM(length(body)),0) AS bytes FROM media WHERE user_id=?').get(user.id).bytes;
+     if(used+normalized.data.length>imageQuotaBytes)return json(res,413,{error:'Votre espace images de 50 Mo est plein. Exportez vos projets et réduisez la taille des images.'});
+     const id=randomUUID();db.prepare('INSERT INTO media VALUES (?,?,?,?,?,?,?)').run(id,user.id,hash,normalized.data,normalized.info.width,normalized.info.height,now());
+     return json(res,201,{id,width:normalized.info.width,height:normalized.info.height});
+    }
+    const imageMatch=path.match(/^\/api\/media\/([a-f0-9-]{36})$/);
+    if(imageMatch&&req.method==='GET'){
+     const image=db.prepare('SELECT body FROM media WHERE id=? AND user_id=?').get(imageMatch[1],user.id);
+     if(!image)return json(res,404,{error:'Image introuvable.'});
+     res.writeHead(200,{'Content-Type':'image/webp','Content-Length':image.body.length,'Cache-Control':'private, no-store','Content-Disposition':'inline','Cross-Origin-Resource-Policy':'same-origin'});return res.end(Buffer.from(image.body));
+    }
     if(path==='/api/library'&&req.method==='GET'){const row=db.prepare('SELECT body,revision FROM libraries WHERE user_id=?').get(user.id);return json(res,200,{data:JSON.parse(row.body),revision:row.revision});}
     if(path==='/api/library'&&req.method==='PUT'){
      const input=await body(req);const parsed=librarySchema.safeParse(input?.data);
      if(!parsed.success||!Number.isSafeInteger(input?.revision)||input.revision<0)return json(res,400,{error:'Bibliothèque invalide. Vérifiez les projets, fiches et relations.'});
+     if(mediaIds(parsed.data).some(id=>!db.prepare('SELECT 1 FROM media WHERE id=? AND user_id=?').get(id,user.id)))return json(res,400,{error:'Une image est indisponible pour ce compte. Importez une sauvegarde contenant ses images ou retirez-la de la fiche.'});
      const result=db.prepare('UPDATE libraries SET body=?, revision=revision+1, updated_at=? WHERE user_id=? AND revision=?').run(JSON.stringify(parsed.data),now(),user.id,input.revision);
      if(!result.changes)return json(res,409,{error:'Votre bibliothèque a changé dans une autre fenêtre. Exportez votre travail puis rechargez la page.'});
      return json(res,200,{revision:input.revision+1});
