@@ -1,0 +1,22 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {once} from 'node:events';
+import {createApp} from './app.js';
+import {testDatabase} from './test-database.js';
+test('profil personnel et changement de mot de passe avec révocation des autres sessions',async t=>{
+ const app=await createApp({...await testDatabase(t),oauthEnv:{}});app.server.listen(0,'127.0.0.1');await once(app.server,'listening');t.after(async()=>{await new Promise(r=>app.server.close(r));await app.db.close();});const base=`http://127.0.0.1:${app.server.address().port}`;
+ const request=(path,method='GET',data,cookie)=>fetch(base+path,{method,headers:{'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},...(data?{body:JSON.stringify(data)}:{})});
+ const credentials={name:'Auteur',email:'profile@example.test',password:'old password 123'};
+ const registered=await request('/api/auth/register','POST',credentials),cookie=registered.headers.get('set-cookie').split(';')[0];assert.equal((await registered.json()).user.canChangePassword,true);
+ const second=await request('/api/auth/login','POST',credentials),other=second.headers.get('set-cookie').split(';')[0];
+ assert.equal((await request('/api/account','PUT',{name:'Pirate'})).status,401);
+ assert.equal((await request('/api/account','PUT',{name:'  '},cookie)).status,400);
+ assert.equal((await request('/api/account','PUT',{name:'Nouveau',id:'other'},cookie)).status,400);
+ const updated=await request('/api/account','PUT',{name:'Nouveau'},cookie);assert.equal((await updated.json()).user.name,'Nouveau');assert.equal((await(await request('/api/auth/me','GET',null,other)).json()).user.name,'Nouveau');
+ assert.equal((await request('/api/account/password','PUT',{currentPassword:'wrong',newPassword:'new password 123'},cookie)).status,400);
+ assert.equal((await request('/api/account/password','PUT',{currentPassword:credentials.password,newPassword:'short'},cookie)).status,400);
+ const changed=await request('/api/account/password','PUT',{currentPassword:credentials.password,newPassword:'new password 123'},cookie);assert.equal(changed.status,200);const next=changed.headers.get('set-cookie').split(';')[0];
+ assert.equal((await request('/api/auth/me','GET',null,cookie)).status,401);assert.equal((await request('/api/auth/me','GET',null,other)).status,401);assert.equal((await request('/api/auth/me','GET',null,next)).status,200);
+ assert.equal((await request('/api/auth/login','POST',credentials)).status,401);assert.equal((await request('/api/auth/login','POST',{...credentials,password:'new password 123'})).status,200);
+ assert.deepEqual((await(await request('/api/library','GET',null,next)).json()).data,{projects:[],active:null});
+});

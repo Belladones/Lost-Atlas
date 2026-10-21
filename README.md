@@ -173,9 +173,9 @@ Il n’existe pas encore de validation d’email, récupération de mot de passe
 
 Les mentions sont détectées dynamiquement en lecture et ouvrent une fiche par son identifiant. Après un changement de nom, conservez l’ancien nom dans les alias. Les références persistantes d’un éditeur riche restent une prochaine étape. Les illustrations sont en CSS et les polices utilisent les familles disponibles sur votre appareil, sans chargement externe. Aucun manuscrit n’est transmis à un service d’IA.
 
-## Connexion avec Google et Apple
+## Connexion avec Google
 
-L’écran de connexion et d’inscription propose **Continuer avec Google** et **Continuer avec Apple**. Chaque fournisseur est activé uniquement quand ses variables sont configurées côté serveur et que `APP_ORIGIN` est une origine valide. Google et Apple créent une bibliothèque vide au premier accès. La connexion par email reste disponible. Aucun secret ne doit être préfixé par `VITE_` ni commité.
+L’écran de connexion et d’inscription propose **Continuer avec Google**. Chaque fournisseur est activé uniquement quand ses variables sont configurées côté serveur et que `APP_ORIGIN` est une origine valide. Google crée une bibliothèque vide au premier accès. La connexion par email reste disponible. Aucun secret ne doit être préfixé par `VITE_` ni commité.
 
 Sur Render, renseignez `APP_ORIGIN=https://votre-site.example` sans slash final et `NODE_ENV=production`, puis ajoutez les variables suivantes dans **Environment** et redéployez :
 
@@ -189,19 +189,11 @@ https://votre-site.example/api/auth/oauth/google/callback
 
 Copiez `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` dans Render. En mode test, ajoutez les utilisateurs autorisés dans la configuration Google ; pour un accès public, suivez les exigences de publication du fournisseur.
 
-### Apple
+Les retours OAuth Google utilisent un état temporaire, un nonce, PKCE et un cookie HttpOnly. Les jetons sont vérifiés cryptographiquement. Une adresse déjà utilisée ne provoque aucune fusion automatique. Sans identifiants réels, le bouton Google reste désactivé. Les tests utilisent des réponses simulées et des jetons signés ; validez la connexion réelle après configuration sur Render. La connexion Apple est retirée.
 
-Dans [Apple Developer](https://developer.apple.com/account/resources/identifiers/list/serviceId), configurez **Sign in with Apple** avec un App ID principal, un **Services ID** pour le site et une clé `.p8` autorisée. Déclarez le domaine et cette URL de retour exacte :
+## Profil et sécurité
 
-```text
-https://votre-site.example/api/auth/oauth/apple/callback
-```
-
-Renseignez `APPLE_CLIENT_ID` (le Services ID), `APPLE_TEAM_ID`, `APPLE_KEY_ID` et `APPLE_PRIVATE_KEY` (contenu privé du fichier `.p8`). La clé accepte les vrais sauts de ligne ou la séquence `\n`. Apple nécessite une origine HTTPS et un compte développeur compatible. Le serveur génère automatiquement le secret client signé à courte durée. Les URL de retour locales HTTP ne conviennent pas à Apple.
-
-Les retours OAuth sont liés au navigateur par un état temporaire, un nonce et un cookie HttpOnly ; Google utilise aussi PKCE. Les ID tokens sont vérifiés cryptographiquement (signature, émetteur, audience, expiration et nonce). Le retour Apple `form_post` utilise un cookie Secure/SameSite=None dédié. Les jetons d’accès des fournisseurs ne sont pas conservés. Les comptes sont identifiés par le fournisseur et son identifiant de sujet ; une adresse email déjà utilisée ne provoque **aucune fusion automatique** : utilisez alors la méthode de connexion existante. L’association explicite de plusieurs méthodes à un compte n’est pas incluse.
-
-Sans identifiants réels Google/Apple, les boutons restent désactivés. Les tests utilisent des réponses OAuth simulées avec de vrais jetons signés et vérifient les signatures, les refus, les cookies et la création de comptes ; ils ne constituent pas une validation auprès des comptes réels des fournisseurs. Après configuration, validez les deux parcours sur votre domaine public.
+Cliquez sur votre profil en bas à gauche pour ouvrir les paramètres. Vous pouvez modifier votre nom d’auteur. L’adresse email est affichée en lecture seule. Les comptes email peuvent modifier leur mot de passe en fournissant le mot de passe actuel et un nouveau d’au moins 12 caractères ; les autres sessions sont alors révoquées. Les comptes Google gèrent leur mot de passe chez Google.
 
 ## Icône et fond des projets
 
@@ -213,6 +205,6 @@ L’analyse prend en charge les couvertures importées et les liens HTTPS public
 
 ## Paramètres d’apparence
 
-Le bouton **Paramètres** de l’en-tête ouvre la section **Apparence**. L’option **Adapter le thème à la couverture**, activée par défaut, étend la palette du projet actif à la barre latérale, l’en-tête, les cartes, les éditeurs, les panneaux, les boutons, les bordures, les fenêtres et le graphe. Les différentes surfaces conservent leur hiérarchie de luminosité et les textes clairs restent lisibles. Les alertes, suppressions et catégories du graphe gardent leurs couleurs distinctives.
+Le profil en bas à gauche ouvre la section **Apparence**. L’option **Adapter le thème à la couverture**, activée par défaut, étend la palette du projet actif à la barre latérale, l’en-tête, les cartes, les éditeurs, les panneaux, les boutons, les bordures, les fenêtres et le graphe. Les différentes surfaces conservent leur hiérarchie de luminosité et les textes clairs restent lisibles. Les alertes, suppressions et catégories du graphe gardent leurs couleurs distinctives.
 
 Désactiver cette option restitue immédiatement les couleurs du thème initial et son fond, même si le projet possède une couverture. Le choix est enregistré dans le compte PostgreSQL et retrouvé après une reconnexion ou sur un autre appareil ; il n’altère pas les projets et ne change pas les préférences des autres comptes. Sans couverture exploitable, le thème initial reste également utilisé. Une erreur de sauvegarde du réglage est signalée et le choix précédent est rétabli.

@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import {z} from 'zod';
 import {settingsSchema,defaultSettings} from '../shared/settings.js';
 import {createOAuth} from './oauth.js';
 import {projectTheme} from './project-theme.js';
@@ -17,7 +18,7 @@ export async function createApp({databaseUrl=process.env.DATABASE_URL,databaseUr
  const db=await createDatabase({connectionString:databaseUrl,migrationConnectionString:databaseUrlUnpooled,schema});
  const attempts=new Map();
  const cookie=(token,maxAge)=>`atlas_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${production?'; Secure':''}`;
- async function session(req){const token=req.headers.cookie?.split(';').map(s=>s.trim()).find(s=>s.startsWith('atlas_session='))?.slice(14);if(!token)return null;return (await db.query('SELECT users.id,users.email,users.name FROM sessions JOIN users ON users.id=sessions.user_id WHERE token_hash=$1 AND expires_at>$2',[digest(token),now()])).rows[0];}
+ async function session(req){const token=req.headers.cookie?.split(';').map(s=>s.trim()).find(s=>s.startsWith('atlas_session='))?.slice(14);if(!token)return null;return (await db.query('SELECT users.id,users.email,users.name,NOT EXISTS (SELECT 1 FROM oauth_identities WHERE user_id=users.id) AS "canChangePassword" FROM sessions JOIN users ON users.id=sessions.user_id WHERE token_hash=$1 AND expires_at>$2',[digest(token),now()])).rows[0];}
  async function openSession(res,userId){const token=randomBytes(32).toString('hex');await db.query('DELETE FROM sessions WHERE expires_at<=$1',[now()]);await db.query('INSERT INTO sessions VALUES ($1,$2,$3)',[digest(token),userId,now()+7*DAY]);res.setHeader('Set-Cookie',cookie(token,7*86400));}
  function json(res,status,body){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(body));}
  async function body(req){let size=0,chunks=[];for await(const chunk of req){size+=chunk.length;if(size>5*1024*1024)throw {status:413,message:'Bibliothèque trop volumineuse (limite : 5 Mo).'};chunks.push(chunk);}try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw {status:400,message:'JSON invalide.'};}}
@@ -50,9 +51,30 @@ export async function createApp({databaseUrl=process.env.DATABASE_URL,databaseUr
       const [salt,expected]=(user?.password_hash||`${'0'.repeat(32)}:${'0'.repeat(128)}`).split(':');const actual=await scrypt(password,salt,64);
       if(!user||!timingSafeEqual(actual,Buffer.from(expected,'hex')))return json(res,401,{error:'Email ou mot de passe incorrect.'});
      }
-     await openSession(res,user.id);return json(res,200,{user:{id:user.id,email:user.email,name:user.name}});
+     await openSession(res,user.id);return json(res,200,{user:{id:user.id,email:user.email,name:user.name,canChangePassword:!(await db.query('SELECT 1 FROM oauth_identities WHERE user_id=$1',[user.id])).rowCount}});
     }
     const user=await session(req);if(!user)return json(res,401,{error:'Connectez-vous pour accéder à votre atelier.'});
+    if(path==='/api/account'&&req.method==='PUT'){
+     const parsed=z.object({name:credentialsSchema.shape.name.unwrap()}).strict().safeParse(await body(req));
+     if(!parsed.success)return json(res,400,{error:'Indiquez un nom de 1 à 100 caractères.'});
+     await db.query('UPDATE users SET name=$1 WHERE id=$2',[parsed.data.name,user.id]);return json(res,200,{user:{...user,name:parsed.data.name}});
+    }
+    if(path==='/api/account/password'&&req.method==='PUT'){
+     if(!user.canChangePassword)return json(res,403,{error:'Votre mot de passe est géré par votre fournisseur de connexion.'});
+     const key='password:'+user.id;let bucket=attempts.get(key);if(!bucket||bucket.until<=now()){bucket={count:0,until:now()+15*60000};attempts.set(key,bucket);}if(++bucket.count>10)return json(res,429,{error:'Trop de tentatives. Réessayez dans 15 minutes.'});
+     const parsed=z.object({currentPassword:z.string().min(1).max(256),newPassword:credentialsSchema.shape.password}).strict().safeParse(await body(req));
+     if(!parsed.success)return json(res,400,{error:'Le nouveau mot de passe doit contenir entre 12 et 256 caractères.'});
+     const result=await db.transaction(async()=>{
+      const row=(await db.query('SELECT password_hash FROM users WHERE id=$1 FOR UPDATE',[user.id])).rows[0];
+      const [salt,expected]=row.password_hash.split(':');const actual=await scrypt(parsed.data.currentPassword,salt,64);
+      if(!timingSafeEqual(actual,Buffer.from(expected,'hex')))return false;
+      const nextSalt=randomBytes(16).toString('hex'),nextHash=(await scrypt(parsed.data.newPassword,nextSalt,64)).toString('hex');
+      await db.query('UPDATE users SET password_hash=$1 WHERE id=$2',[nextSalt+':'+nextHash,user.id]);
+      await db.query('DELETE FROM sessions WHERE user_id=$1',[user.id]);return true;
+     });
+     if(!result)return json(res,400,{error:'Le mot de passe actuel est incorrect.'});
+     await openSession(res,user.id);return json(res,200,{ok:true});
+    }
     if(path==='/api/settings'&&req.method==='GET'){
      const row=(await db.query('SELECT body FROM user_settings WHERE user_id=$1',[user.id])).rows[0];return json(res,200,{settings:row?.body||defaultSettings});
     }
