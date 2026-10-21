@@ -30,7 +30,7 @@ Les tests couvrent les mentions, l’authentification, l’isolation des bibliot
 
 ## Stockage et utilisateurs
 
-Chaque compte possède sa bibliothèque ; le serveur déduit son propriétaire de la session et n’accepte aucun identifiant utilisateur fourni par le navigateur pour accéder aux données. Un nouvel utilisateur reçoit une copie indépendante de l’univers de démonstration.
+Chaque compte possède sa bibliothèque ; le serveur déduit son propriétaire de la session et n’accepte aucun identifiant utilisateur fourni par le navigateur pour accéder aux données. Un nouvel utilisateur commence avec une bibliothèque vide, sans projet, fiche, chapitre, image ni relation. Il peut créer son premier projet ou importer sa propre sauvegarde.
 
 Les mots de passe sont hachés avec scrypt et un sel aléatoire. Les sessions durent sept jours et sont stockées sous forme hachée dans PostgreSQL ; leur cookie est HttpOnly et SameSite=Lax (également Secure en production). La déconnexion révoque la session courante. Les écritures sont validées côté serveur ; les requêtes provenant d’un autre site sont refusées. L’API limite les tentatives d’authentification par IP (20 par 15 minutes ; compteur en mémoire, réinitialisé au redémarrage).
 

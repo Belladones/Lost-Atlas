@@ -28,7 +28,7 @@ test('refuse accès anonyme, compte dupliqué et mot de passe faible',async t=>{
 test('bibliothèques privées et protection contre les écrasements concurrents',async t=>{
  const {request,register}=await setup(t);const a=await register('a@example.test'),b=await register('b@example.test');const data=structuredClone(initial);data.projects[0].name='Secret de A';
  assert.equal((await request('/api/library',{method:'PUT',cookie:a.cookie,body:{data,revision:0,user_id:b.body.user.id}})).status,200);
- assert.equal((await request('/api/library',{cookie:a.cookie})).body.data.projects[0].name,'Secret de A');assert.equal((await request('/api/library',{cookie:b.cookie})).body.data.projects[0].name,initial.projects[0].name);
+ assert.equal((await request('/api/library',{cookie:a.cookie})).body.data.projects[0].name,'Secret de A');assert.deepEqual((await request('/api/library',{cookie:b.cookie})).body.data,{projects:[],active:null});
  assert.equal((await request('/api/library/'+a.body.user.id,{cookie:b.cookie})).status,404);
  assert.equal((await request('/api/library',{method:'PUT',cookie:a.cookie,body:{data:initial,revision:0}})).status,409);
  assert.equal((await request('/api/library',{cookie:a.cookie})).body.data.projects[0].name,'Secret de A');
@@ -62,11 +62,20 @@ test('la suppression du dernier projet reste persistante et privée',async t=>{
  const {request,register}=await setup(t);const a=await register('empty@example.test'),b=await register('other@example.test');
  const saved=await request('/api/library',{cookie:a.cookie,method:'PUT',body:{data:{projects:[],active:null},revision:0}});assert.equal(saved.status,200);
  const loaded=await request('/api/library',{cookie:a.cookie});assert.deepEqual(loaded.body.data,{projects:[],active:null});
- assert.equal((await request('/api/library',{cookie:b.cookie})).body.data.projects.length,1);
+ assert.equal((await request('/api/library',{cookie:b.cookie})).body.data.projects.length,0);
  assert.equal((await request('/api/library',{cookie:a.cookie,method:'PUT',body:{data:initial,revision:loaded.body.revision}})).status,200);
 });
 test('deux sauvegardes simultanées avec la même révision ne peuvent pas s’écraser',async t=>{
  const {request,register}=await setup(t);const {cookie}=await register();
  const results=await Promise.all(['Version A','Version B'].map(name=>{const data=structuredClone(initial);data.projects[0].name=name;return request('/api/library',{cookie,method:'PUT',body:{data,revision:0}});}));
  assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);assert.equal((await request('/api/library',{cookie})).body.revision,1);
+});
+
+test('un nouveau compte reçoit une bibliothèque vide sans modifier les comptes existants',async t=>{
+ const {request,register}=await setup(t);const a=await register('existing@example.test');
+ assert.deepEqual((await request('/api/library',{cookie:a.cookie})).body,{data:{projects:[],active:null},revision:0});
+ assert.equal((await request('/api/library',{cookie:a.cookie,method:'PUT',body:{data:initial,revision:0}})).status,200);
+ const b=await register('new@example.test');
+ assert.deepEqual((await request('/api/library',{cookie:b.cookie})).body,{data:{projects:[],active:null},revision:0});
+ const preserved=(await request('/api/library',{cookie:a.cookie})).body;assert.equal(preserved.revision,1);assert.equal(preserved.data.projects[0].name,initial.projects[0].name);assert.equal(preserved.data.projects[0].entities.length,initial.projects[0].entities.length);
 });

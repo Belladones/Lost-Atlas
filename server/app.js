@@ -6,7 +6,6 @@ import {randomBytes,randomUUID,scrypt as scryptCallback,timingSafeEqual,createHa
 import {promisify} from 'node:util';
 import {readFileSync,existsSync,statSync} from 'node:fs';
 import {resolve,extname,sep} from 'node:path';
-import {initial} from '../src/model.js';
 import {credentialsSchema,librarySchema} from '../shared/schema.js';
 const scrypt=promisify(scryptCallback);
 const digest=s=>createHash('sha256').update(s).digest('hex');
@@ -41,7 +40,7 @@ export async function createApp({databaseUrl=process.env.DATABASE_URL,databaseUr
       const salt=randomBytes(16).toString('hex');const hash=(await scrypt(password,salt,64)).toString('hex');
       if(user)return json(res,409,{error:'Impossible de créer ce compte. Essayez de vous connecter.'});
       user={id:randomUUID(),email,name};
-      try{await db.transaction(async()=>{await db.query('INSERT INTO users VALUES ($1,$2,$3,$4,$5)',[user.id,email,name,`${salt}:${hash}`,now()]);await db.query('INSERT INTO libraries VALUES ($1,$2,0,$3)',[user.id,JSON.stringify(initial),now()]);});}catch(e){if(e.code==='23505')return json(res,409,{error:'Impossible de créer ce compte.'});throw e;}
+      try{await db.transaction(async()=>{await db.query('INSERT INTO users VALUES ($1,$2,$3,$4,$5)',[user.id,email,name,`${salt}:${hash}`,now()]);await db.query('INSERT INTO libraries VALUES ($1,$2,0,$3)',[user.id,JSON.stringify({projects:[],active:null}),now()]);});}catch(e){if(e.code==='23505')return json(res,409,{error:'Impossible de créer ce compte.'});throw e;}
      }else{
       const [salt,expected]=(user?.password_hash||`${'0'.repeat(32)}:${'0'.repeat(128)}`).split(':');const actual=await scrypt(password,salt,64);
       if(!user||!timingSafeEqual(actual,Buffer.from(expected,'hex')))return json(res,401,{error:'Email ou mot de passe incorrect.'});
