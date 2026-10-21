@@ -220,3 +220,5 @@ Dans **Manuscrit**, recherchez un chapitre par son titre ou son texte (sans dist
 **Lire le livre**, dans le menu et le manuscrit, ouvre une lecture paginée de tous les chapitres dans cet ordre. Le sommaire permet de rejoindre un chapitre ; la taille du texte ajuste la pagination. La lecture affiche deux pages sur grand écran et une sur petit écran. Les noms et alias des fiches sont des liens cliquables. Les boutons ou les flèches du clavier lorsque le lecteur est sélectionné tournent les pages ; les animations respectent la préférence de mouvement réduit. Cette vue ne modifie pas le texte et permet de revenir à l’écriture du chapitre affiché.
 
 Le changement de projet passe par **Ma bibliothèque**, sans sélecteur en doublon. Le décor public privilégie un ciel étoilé discret avec quelques constellations espacées.
+
+Le tournage reprend le principe de la feuille souple du livre ZIM : courbure autour de la reliure, recto-verso et ombres progressives. La page opposée reste fixe. Le rendu conserve le texte HTML et ses liens ; le mouvement est désactivé en mode de réduction des animations.
