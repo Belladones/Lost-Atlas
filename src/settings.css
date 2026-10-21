@@ -24,3 +24,5 @@
 .app[data-adaptive-theme=true] .primary:hover{background:var(--appearance-primary-hover)}
 
 .profile-settings{display:flex;align-items:center;gap:11px;text-align:left;width:100%;min-width:0;color:inherit}.profile-settings>div:last-child{min-width:0;overflow-wrap:anywhere}.profile-settings:hover{color:var(--gold)}.settings-dialog{max-height:calc(100dvh - 40px);overflow-y:auto}.settings-dialog h3{margin-top:28px}.settings-dialog form .secondary{margin-top:14px}.settings-dialog input[readonly]{opacity:.65}.social-auth{grid-template-columns:1fr}
+
+.profile>.logout{width:100%;flex-basis:100%;margin-left:0;text-align:center}
