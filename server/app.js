@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import {settingsSchema,defaultSettings} from '../shared/settings.js';
 import {createOAuth} from './oauth.js';
 import {projectTheme} from './project-theme.js';
 import {mediaIds} from '../shared/media.js';
@@ -52,6 +53,13 @@ export async function createApp({databaseUrl=process.env.DATABASE_URL,databaseUr
      await openSession(res,user.id);return json(res,200,{user:{id:user.id,email:user.email,name:user.name}});
     }
     const user=await session(req);if(!user)return json(res,401,{error:'Connectez-vous pour accéder à votre atelier.'});
+    if(path==='/api/settings'&&req.method==='GET'){
+     const row=(await db.query('SELECT body FROM user_settings WHERE user_id=$1',[user.id])).rows[0];return json(res,200,{settings:row?.body||defaultSettings});
+    }
+    if(path==='/api/settings'&&req.method==='PUT'){
+     const parsed=settingsSchema.safeParse(await body(req));if(!parsed.success)return json(res,400,{error:'Paramètres invalides.'});
+     await db.query('INSERT INTO user_settings VALUES ($1,$2) ON CONFLICT(user_id) DO UPDATE SET body=excluded.body',[user.id,JSON.stringify(parsed.data)]);return json(res,200,{settings:parsed.data});
+    }
     if(path==='/api/project-theme'&&req.method==='GET'){
      const library=(await db.query('SELECT body FROM libraries WHERE user_id=$1',[user.id])).rows[0].body;
      const project=library.projects.find(p=>p.id===url.searchParams.get('projectId'));

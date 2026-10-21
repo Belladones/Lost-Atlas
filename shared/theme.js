@@ -22,3 +22,27 @@ export function coverColorFromPixels(pixels){
  if(dominant)return darkCoverColor({r:dominant.r/dominant.weight,g:dominant.g/dominant.weight,b:dominant.b/dominant.weight});
  return neutralWeight?darkCoverColor({r:neutral[0]/neutralWeight,g:neutral[1]/neutralWeight,b:neutral[2]/neutralWeight}):DEFAULT_BACKGROUND;
 }
+
+function hexChannels(value){let hex=value.replace('#','');if(hex.length===3||hex.length===4)hex=[...hex].map(c=>c+c).join('');return {rgb:[0,2,4].map(i=>parseInt(hex.slice(i,i+2),16)),alpha:hex.slice(6)};}
+function hueOf([r,g,b]){const max=Math.max(r,g,b),min=Math.min(r,g,b),delta=max-min;if(!delta)return 0;let hue=max===r?((g-b)/delta)%6:max===g?(b-r)/delta+2:(r-g)/delta+4;return (hue/6+1)%1;}
+function hslToHex(h,s,l){const channel=n=>{const k=(n+h*12)%12,a=s*Math.min(l,1-l);return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1)))).toString(16).padStart(2,'0');};return channel(0)+channel(8)+channel(4);}
+function colorLuminance(rgb){return rgb.reduce((total,v,i)=>{v/=255;return total+(v<=.04045?v/12.92:((v+.055)/1.055)**2.4)*[.2126,.7152,.0722][i];},0);}
+function tintWithLuminance(hue,saturation,source){
+ const target=colorLuminance(source);let low=0,high=1;
+ for(let i=0;i<12;i++){const middle=(low+high)/2;const rgb=hexChannels(hslToHex(hue,saturation,middle)).rgb;if(colorLuminance(rgb)<target)low=middle;else high=middle;}
+ return hslToHex(hue,saturation,(low+high)/2);
+}
+export function appearancePalette(coverColor,colors){
+ if(!/^#[0-9a-f]{6}$/i.test(coverColor)||coverColor.toLowerCase()===DEFAULT_BACKGROUND)return {};
+ const {rgb}=hexChannels(coverColor),hue=hueOf(rgb);const palette={};
+ for(const color of colors){
+  const {rgb:source,alpha}=hexChannels(color),max=Math.max(...source)/255,min=Math.min(...source)/255,lightness=(max+min)/2;
+  // Keep light ivory text and the original brightness hierarchy. Only the hue
+  // of surfaces, muted labels, borders and accents follows the project's cover.
+  palette['--theme-'+color]=lightness>=.77?'#'+color:'#'+tintWithLuminance(hue,lightness<.4?.23:.19,source)+alpha;
+ }
+ palette['--appearance-primary']='#'+hslToHex(hue,.22,.78);palette['--appearance-primary-hover']='#'+hslToHex(hue,.22,.84);palette['--appearance-primary-ink']='#'+hslToHex(hue,.2,.1);
+ palette['--gold']=palette['--theme-ac9160']||'#ac9160';palette['--ink']=palette['--theme-253b32']||'#253b32';palette['--line']=palette['--theme-36362f']||'#36362f';
+ palette['--appearance-button']=palette['--theme-c5b797'];palette['--appearance-line']=palette['--theme-51442e'];palette['--appearance-text']='#e4dfd2';palette['--appearance-muted']=palette['--theme-a99b7e'];palette['--appearance-switch-off']=palette['--theme-181813'];palette['--appearance-switch-on']=palette['--theme-58513b'];palette['--appearance-switch-knob']=palette['--theme-bca87f'];
+ return palette;
+}

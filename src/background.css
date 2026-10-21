@@ -3,8 +3,8 @@
 .app{background:transparent}
 @media(prefers-reduced-motion:reduce){.project-background{transition:none}}
 .social-auth{display:grid;gap:10px;margin-top:22px}
-.social-auth button{display:flex;align-items:center;justify-content:center;gap:11px;background:#ece5d5;color:#171715;border:1px solid #b8aa8d;border-radius:4px;padding:12px;font-size:12px}
+.social-auth button{display:flex;align-items:center;justify-content:center;gap:11px;background:var(--theme-ece5d5,#ece5d5);color:var(--theme-171715,#171715);border:1px solid var(--theme-b8aa8d,#b8aa8d);border-radius:4px;padding:12px;font-size:12px}
 .social-auth button:disabled{opacity:.45;cursor:not-allowed}
 .social-auth svg{width:21px;height:21px;flex-shrink:0}
-.auth-separator{display:flex;align-items:center;gap:12px;font-size:10px;color:#a49980;margin:22px 0 4px}
-.auth-separator:before,.auth-separator:after{content:'';height:1px;background:#62553a;flex:1}
+.auth-separator{display:flex;align-items:center;gap:12px;font-size:10px;color:var(--theme-a49980,#a49980);margin:22px 0 4px}
+.auth-separator:before,.auth-separator:after{content:'';height:1px;background:var(--theme-62553a,#62553a);flex:1}

@@ -1,0 +1,24 @@
+.settings-button{display:flex;align-items:center;gap:7px;font-size:10px;color:var(--appearance-button,var(--theme-c5b797,#c5b797))}
+.settings-dialog{width:540px}
+.settings-dialog h2{font-size:38px;font-style:italic;margin:20px 0 30px}
+.settings-dialog h3{font-size:25px;margin-bottom:20px}
+.modal .theme-setting{display:flex;align-items:center;gap:20px;padding:22px 0;border-block:1px solid var(--appearance-line,var(--theme-51442e,#51442e));margin:0;cursor:pointer}
+.theme-setting>span{flex:1}
+.theme-setting strong{display:block;font-size:13px;line-height:1.5;color:var(--appearance-text,var(--theme-e4dfd2,#e4dfd2))}
+.theme-setting small{display:block;font-size:11px;line-height:1.7;margin-top:8px;color:var(--appearance-muted,var(--theme-a99b7e,#a99b7e))}
+.modal .theme-setting input{appearance:none;position:relative;display:block;flex-shrink:0;width:44px;height:25px;margin:0;padding:0;border:1px solid var(--appearance-line,var(--theme-68583b,#68583b));border-radius:20px;background:var(--appearance-switch-off,var(--theme-181813,#181813));cursor:pointer}
+.theme-setting input:before{content:'';position:absolute;left:4px;top:4px;width:15px;height:15px;border-radius:50%;background:var(--appearance-switch-knob,var(--theme-bca87f,#bca87f));transition:transform .15s}
+.modal .theme-setting input:checked{background:var(--appearance-switch-on,var(--theme-58513b,#58513b))}
+.theme-setting input:checked:before{transform:translateX(19px);background:var(--appearance-text,var(--theme-e4dfd2,#e4dfd2))}
+.theme-setting input:disabled{opacity:.5;cursor:wait}
+.settings-description{font-size:12px;line-height:1.9;color:var(--appearance-muted,var(--theme-b9aa8b,#b9aa8b));margin:20px 0}
+.settings-save{min-height:24px;font-size:10px;color:var(--appearance-muted,var(--theme-a99b7e,#a99b7e));margin:20px 0}
+.settings-error{font-size:12px;line-height:1.7;color:#edb194;margin-top:15px}
+@media(max-width:650px){.settings-button>span{display:none}}
+.header-actions{flex-shrink:0}
+.breadcrumb{min-width:0}
+.breadcrumb strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:650px){.header-actions{gap:12px}}
+
+.app[data-adaptive-theme=true] .primary{background:var(--appearance-primary);border-color:var(--appearance-primary);color:var(--appearance-primary-ink)}
+.app[data-adaptive-theme=true] .primary:hover{background:var(--appearance-primary-hover)}
