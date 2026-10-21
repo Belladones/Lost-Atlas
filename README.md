@@ -224,3 +224,13 @@ Le changement de projet passe par **Ma bibliothèque**, sans sélecteur en doubl
 Le tournage reprend le principe de la feuille souple du livre ZIM : courbure autour de la reliure, recto-verso et ombres progressives. La page opposée reste fixe. Le rendu conserve le texte HTML et ses liens ; le mouvement est désactivé en mode de réduction des animations.
 
 Les titres de chapitre n’apparaissent qu’au début de chaque chapitre, et les pages de suite utilisent la place libérée. Vous pouvez aussi saisir la page et la faire glisser : vers la gauche pour avancer, vers la droite pour revenir (sur grand écran, saisissez la page droite ou gauche correspondante). Le geste fonctionne à la souris et au doigt ; un mouvement court ou annulé remet la feuille en place. Les liens restent cliquables et le défilement vertical tactile est conservé.
+
+## Importer des fiches et des chapitres
+
+Dans **Encyclopédie → Importer des éléments** ou **Manuscrit → Importer des chapitres**, sélectionnez Personnage, Lieu, Organisation ou Chapitre et téléchargez son modèle CSV. Remplacez la ligne d’exemple par vos données, en conservant les en-têtes, puis exportez en **CSV UTF-8** depuis votre tableur. Les séparateurs point-virgule et virgule, les cellules entre guillemets et les textes sur plusieurs lignes sont pris en charge. Le modèle personnage comprend les champs détaillés de sa fiche.
+
+Seuls `nom` (fiches) et `titre` (chapitres) sont obligatoires ; les colonnes facultatives peuvent être omises. Les chapitres acceptent les statuts `Idée`, `En cours` et `Terminé` (`Idée` par défaut). Les images utilisent des liens HTTPS, sans import de fichiers binaires. Les colonnes disponibles et leurs règles figurent aussi dans la fenêtre d’import.
+
+Choisissez le fichier, consultez l’aperçu et confirmez l’ajout au projet actif. Les noms ou titres déjà présents dans le même type sont signalés et ignorés par défaut, y compris les répétitions dans le fichier ; décochez l’option pour les conserver comme nouveaux éléments. Aucun élément existant n’est remplacé. Les chapitres sont ajoutés à la fin, dans l’ordre des lignes. Annuler ou fournir un fichier invalide n’ajoute rien.
+
+Limites : **200 éléments et 2 Mo par fichier**, dans les limites habituelles du projet et de la bibliothèque. Un seul élément invalide bloque le fichier entier avec un message indiquant la ligne de données concernée. L’import validé utilise l’enregistrement automatique habituel du compte.
