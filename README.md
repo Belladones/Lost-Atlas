@@ -208,3 +208,7 @@ L’analyse prend en charge les couvertures importées et les liens HTTPS public
 Le profil en bas à gauche ouvre la section **Apparence**. L’option **Adapter le thème à la couverture**, activée par défaut, étend la palette du projet actif à la barre latérale, l’en-tête, les cartes, les éditeurs, les panneaux, les boutons, les bordures, les fenêtres et le graphe. Les différentes surfaces conservent leur hiérarchie de luminosité et les textes clairs restent lisibles. Les alertes, suppressions et catégories du graphe gardent leurs couleurs distinctives.
 
 Désactiver cette option restitue immédiatement les couleurs du thème initial et son fond, même si le projet possède une couverture. Le choix est enregistré dans le compte PostgreSQL et retrouvé après une reconnexion ou sur un autre appareil ; il n’altère pas les projets et ne change pas les préférences des autres comptes. Sans couverture exploitable, le thème initial reste également utilisé. Une erreur de sauvegarde du réglage est signalée et le choix précédent est rétabli.
+
+## Accueil public
+
+Les visiteurs déconnectés découvrent une page de présentation unique avec navigation par ancres, aperçu fictif de l’atelier et accès à la connexion (`#connexion`) ou à l’inscription (`#inscription`). Les comptes connectés arrivent directement dans leur bibliothèque. La déconnexion revient à l’accueil public. Les illustrations astronomiques sont générées en SVG local, sans dépendance à un hébergeur d’images.
