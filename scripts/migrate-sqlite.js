@@ -5,7 +5,7 @@ import {pathToFileURL} from 'node:url';
 import {createDatabase} from '../server/database.js';
 import {mediaIds} from '../shared/media.js';
 
-export async function migrateSqlite({source,connectionString=process.env.DATABASE_URL,schema,dryRun=false}){
+export async function migrateSqlite({source,connectionString=process.env.DATABASE_URL_UNPOOLED||process.env.DATABASE_URL,schema,dryRun=false}){
  const sqlite=new DatabaseSync(source,{readOnly:true});
  let db;
  try{

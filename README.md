@@ -59,6 +59,27 @@ Les comptes, sessions, projets et images sont conservés dans PostgreSQL. Config
 
 En développement, Docker conserve les données dans le volume `postgres_data`. `docker compose down` les conserve ; **`docker compose down -v` les détruit**. Le mot de passe de `.env.example` est exclusivement destiné à la base locale, dont le port est limité à l’interface locale. Utilisez un secret privé en production. Changer le mot de passe du fichier `.env` ne change pas celui d’un volume déjà initialisé.
 
+## Neon avec un serveur Node (Render, VPS…)
+
+Le projet conserve son serveur Node.js et son pilote `pg`. Neon héberge PostgreSQL ; le frontend et l’API restent hébergés sur Render ou votre serveur. `neon.ts` déclare uniquement PostgreSQL : les comptes et les images continuent d’utiliser les tables privées existantes.
+
+```sh
+npx neon@latest login
+npx neon@latest init -y --org-id org-broad-flower-17963429 --project-id summer-queen-36701409 --branch production --services postgres
+npx neon@latest deploy
+npm run build
+npm start
+```
+
+`neon deploy` provisionne les services déclarés et récupère leurs variables dans `.env` s’il existe, sinon dans `.env.local`. Le serveur, les tests et les scripts chargent les deux fichiers ; les variables du processus priment, puis `.env.local`, puis `.env`. Ne commitez jamais ces fichiers.
+
+- `DATABASE_URL` : URL pooled fournie par Neon, pour les requêtes de l’application.
+- `DATABASE_URL_UNPOOLED` : URL directe, utilisée par l’initialisation du schéma, le transfert SQLite et les sauvegardes. Sans cette variable, la connexion principale est utilisée pour PostgreSQL local.
+
+Sur Render, ajoutez ces deux valeurs privées dans **Environment**, avec `NODE_ENV=production` et `APP_ORIGIN` égal à l’origine publique exacte du site, puis redéployez. Ne préfixez jamais les identifiants de base par `VITE_` : ils restent exclusivement côté serveur.
+
+La liaison locale `.neon` est ignorée par Git. Si vous clonez le dépôt sur une nouvelle machine, relancez `neon init` ou `neon link` avec le projet et la branche ci-dessus avant `neon deploy`. Une connexion à Neon et des accès réseau à son API sont nécessaires. La compilation seule ne vérifie pas la connexion à la base ; vérifiez également `/api/health`, la création d’un compte, l’enregistrement puis la relecture d’un projet et d’une image.
+
 ## Transférer la base SQLite existante
 
 Arrêtez l’ancienne application pour éviter des écritures pendant le transfert. Conservez une sauvegarde SQLite cohérente avec ses éventuels fichiers WAL/SHM. Configurez `DATABASE_URL` vers une **base PostgreSQL vide**, démarrez PostgreSQL, puis exécutez :

@@ -15,6 +15,8 @@
     "migrate:sqlite": "node scripts/migrate-sqlite.js"
   },
   "dependencies": {
+    "@neon/config": "^1.9.3",
+    "@neon/env": "^1.6.4",
     "lucide-react": "^0.468.0",
     "pg": "^8.23.1",
     "react": "^19.0.0",

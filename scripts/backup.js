@@ -29,7 +29,7 @@ function postgresTool(command,args,connectionString,{input,output}={}){
   child.on('exit',code=>code===0?resolve():reject(Error(`${command} a échoué. Vérifiez la connexion, les droits et la version du client PostgreSQL.`)));
  });
 }
-export async function backupDatabase({connectionString=process.env.DATABASE_URL,target,schema}={}){
+export async function backupDatabase({connectionString=process.env.DATABASE_URL_UNPOOLED||process.env.DATABASE_URL,target,schema}={}){
  mkdirSync(dirname(target),{recursive:true,mode:0o700});
  const fd=openSync(target,'wx',0o600);
  try{await postgresTool('pg_dump',['--format=custom','--no-owner','--no-acl',...(schema?['--schema',schema]:[])],connectionString,{output:fd});}

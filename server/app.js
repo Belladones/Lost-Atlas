@@ -11,8 +11,8 @@ import {credentialsSchema,librarySchema} from '../shared/schema.js';
 const scrypt=promisify(scryptCallback);
 const digest=s=>createHash('sha256').update(s).digest('hex');
 const DAY=86400000;
-export async function createApp({databaseUrl=process.env.DATABASE_URL,schema,production=false,appOrigin,dist=resolve('dist'),now=Date.now,imageQuotaBytes=50*1024*1024}={}){
- const db=await createDatabase({connectionString:databaseUrl,schema});
+export async function createApp({databaseUrl=process.env.DATABASE_URL,databaseUrlUnpooled=databaseUrl===process.env.DATABASE_URL?process.env.DATABASE_URL_UNPOOLED:undefined,schema,production=false,appOrigin,dist=resolve('dist'),now=Date.now,imageQuotaBytes=50*1024*1024}={}){
+ const db=await createDatabase({connectionString:databaseUrl,migrationConnectionString:databaseUrlUnpooled,schema});
  const attempts=new Map();
  const cookie=(token,maxAge)=>`atlas_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${production?'; Secure':''}`;
  async function session(req){const token=req.headers.cookie?.split(';').map(s=>s.trim()).find(s=>s.startsWith('atlas_session='))?.slice(14);if(!token)return null;return (await db.query('SELECT users.id,users.email,users.name FROM sessions JOIN users ON users.id=sessions.user_id WHERE token_hash=$1 AND expires_at>$2',[digest(token),now()])).rows[0];}
