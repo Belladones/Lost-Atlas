@@ -222,3 +222,5 @@ Dans **Manuscrit**, recherchez un chapitre par son titre ou son texte (sans dist
 Le changement de projet passe par **Ma bibliothèque**, sans sélecteur en doublon. Le décor public privilégie un ciel étoilé discret avec quelques constellations espacées.
 
 Le tournage reprend le principe de la feuille souple du livre ZIM : courbure autour de la reliure, recto-verso et ombres progressives. La page opposée reste fixe. Le rendu conserve le texte HTML et ses liens ; le mouvement est désactivé en mode de réduction des animations.
+
+Les titres de chapitre n’apparaissent qu’au début de chaque chapitre, et les pages de suite utilisent la place libérée. Vous pouvez aussi saisir la page et la faire glisser : vers la gauche pour avancer, vers la droite pour revenir (sur grand écran, saisissez la page droite ou gauche correspondante). Le geste fonctionne à la souris et au doigt ; un mouvement court ou annulé remet la feuille en place. Les liens restent cliquables et le défilement vertical tactile est conservé.

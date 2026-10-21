@@ -14,15 +14,16 @@ export function paginateBook(chapters,entities,fits){
  const pages=[];
  for(const [chapterIndex,chapter] of chapters.entries()){
   let parts=[],text='',chapterPage=0;
+  const fitsPage=value=>fits(value,chapterPage);
   const emit=()=>{pages.push({chapterId:chapter.id,title:chapter.title,chapterIndex,chapterPage:chapterPage++,parts});parts=[];text='';};
   for(const part of mentionParts(chapter.text,entities)){
    const tokens=part.id?[part.text]:(part.text.match(/\s+|\S+/gu)||[]);
    for(let token of tokens){
-    if(fits(text+token)){parts.push({text:token,...(part.id?{id:part.id}:{})});text+=token;continue;}
+    if(fitsPage(text+token)){parts.push({text:token,...(part.id?{id:part.id}:{})});text+=token;continue;}
     if(text)emit();
-    while(token&&!fits(token)){
+    while(token&&!fitsPage(token)){
      const chars=Array.from(token);let low=1,high=chars.length;
-     while(low<high){const middle=Math.ceil((low+high)/2);if(fits(chars.slice(0,middle).join('')))low=middle;else high=middle-1;}
+     while(low<high){const middle=Math.ceil((low+high)/2);if(fitsPage(chars.slice(0,middle).join('')))low=middle;else high=middle-1;}
      const chunk=chars.slice(0,low).join('');parts.push({text:chunk,...(part.id?{id:part.id}:{})});text=chunk;token=chars.slice(low).join('');emit();
     }
     if(token){parts.push({text:token,...(part.id?{id:part.id}:{})});text=token;}

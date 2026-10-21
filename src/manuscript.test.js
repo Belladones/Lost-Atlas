@@ -17,3 +17,6 @@ test('pagination des très longs mots, liens et caractères Unicode, même dans 
  const title='Un très long nom de personnage';const input=[{id:'long',title:'Long',text:title+'\n\n'+('🌙'.repeat(80))}];const es=[{id:'long-name',name:title,alias:''}];const pages=paginateBook(input,es,text=>Array.from(text).length<=9);
  assert.equal(pages.flatMap(p=>p.parts).map(p=>p.text).join(''),input[0].text);assert.ok(pages.every(p=>Array.from(p.parts.map(x=>x.text).join('')).length<=9));assert.equal(pages.flatMap(p=>p.parts).filter(p=>p.id).map(p=>p.text).join(''),title);assert.deepEqual(paginateBook([],[],()=>true),[]);
 });
+test('les pages de suite disposent de plus de place sans répéter le titre ni perdre de texte',()=>{
+ const source=[{id:'one',title:'Un titre',text:'Une histoire qui continue. '.repeat(20)}];const pages=paginateBook(source,[],(text,index)=>text.length<=(index?80:30));assert.ok(pages[0].parts.map(p=>p.text).join('').length<=30);assert.ok(pages[1].parts.map(p=>p.text).join('').length>30);assert.equal(pages.flatMap(p=>p.parts).map(p=>p.text).join(''),source[0].text);
+});
