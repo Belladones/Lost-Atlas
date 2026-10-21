@@ -212,3 +212,11 @@ Désactiver cette option restitue immédiatement les couleurs du thème initial 
 ## Accueil public
 
 Les visiteurs déconnectés découvrent une page de présentation unique avec navigation par ancres, aperçu fictif de l’atelier et accès à la connexion (`#connexion`) ou à l’inscription (`#inscription`). Les comptes connectés arrivent directement dans leur bibliothèque. La déconnexion revient à l’accueil public. Les illustrations astronomiques sont générées en SVG local, sans dépendance à un hébergeur d’images.
+
+## Manuscrit et lecture du livre
+
+Dans **Manuscrit**, recherchez un chapitre par son titre ou son texte (sans distinction d’accents), filtrez par statut et triez l’affichage par titre ou longueur. Le tri d’affichage ne modifie pas le récit. Les flèches **Monter / Descendre**, disponibles dans « Ordre du livre » sans filtre, enregistrent le nouvel ordre des chapitres.
+
+**Lire le livre**, dans le menu et le manuscrit, ouvre une lecture paginée de tous les chapitres dans cet ordre. Le sommaire permet de rejoindre un chapitre ; la taille du texte ajuste la pagination. La lecture affiche deux pages sur grand écran et une sur petit écran. Les noms et alias des fiches sont des liens cliquables. Les boutons ou les flèches du clavier lorsque le lecteur est sélectionné tournent les pages ; les animations respectent la préférence de mouvement réduit. Cette vue ne modifie pas le texte et permet de revenir à l’écriture du chapitre affiché.
+
+Le changement de projet passe par **Ma bibliothèque**, sans sélecteur en doublon. Le décor public privilégie un ciel étoilé discret avec quelques constellations espacées.

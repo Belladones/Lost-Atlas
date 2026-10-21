@@ -5,7 +5,7 @@
 
 /* A subtle continuous star chart behind every section, including the footer. */
 .landing{position:relative;isolation:isolate}
-.landing::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;background:url('/constellations.svg') repeat;background-size:1200px 1000px;opacity:.48;animation:landing-starlight 14s ease-in-out infinite alternate}
+.landing::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;background:url('/constellations.svg') repeat;background-size:1600px 1400px;opacity:.48;animation:landing-starlight 14s ease-in-out infinite alternate}
 @keyframes landing-starlight{from{opacity:.38}to{opacity:.6}}
-@media(max-width:580px){.landing::before{background-size:760px 850px;background-position:35% 0}}
+@media(max-width:580px){.landing::before{background-size:900px 1000px;background-position:35% 0}}
 @media(prefers-reduced-motion:reduce){.landing::before{animation:none}}
