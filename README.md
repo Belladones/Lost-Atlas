@@ -1,23 +1,30 @@
 # Lost Atlas
 
-Atelier narratif en français : projets, encyclopédie, chapitres à mentions cliquables et relations. Une API Node.js stocke désormais les comptes et leurs bibliothèques privées dans SQLite.
+Atelier narratif en français : projets, encyclopédie, chapitres à mentions cliquables et relations. Une API Node.js stocke désormais les comptes et leurs bibliothèques privées dans PostgreSQL.
 
 ## Démarrage en développement
 
-Node.js **24 ou plus récent**, npm. Aucun service de base de données externe ni clé API nécessaire.
+Node.js **24 ou plus récent**, npm et PostgreSQL 17 ou plus récent. Docker Compose fournit une base locale ; vous pouvez aussi utiliser votre propre serveur PostgreSQL. Aucune clé API nécessaire.
 
 ```sh
 cd /workspace/Lost-Atlas
-npm ci --cache /tmp/lost-atlas-npm
+npm ci
+cp -n .env.example .env
+docker compose up -d --wait
 npm run dev
 ```
 
 Cette commande lance l’API sur le port 3001 et Vite sur le port 5173. Vite transmet `/api` au serveur. Créez votre compte depuis l’écran d’accueil : nom, adresse email et mot de passe d’au moins 12 caractères. Aucun compte ou mot de passe par défaut.
 
 ```sh
-npm test
+# Une seule fois : base distincte, réservée aux tests.
+docker compose exec db createdb -U atlas lost_atlas_test
+# Le client PostgreSQL pg_dump/pg_restore doit être installé, ou fourni par Docker :
+PG_CONTAINER=$(docker compose ps -q db) npm test
 npm run build
 ```
+
+`.env` est chargé automatiquement par le serveur, les tests et les scripts. `DATABASE_URL` sélectionne la base de l’application ; `TEST_DATABASE_URL` sélectionne une base réservée aux tests. Les tests créent puis suppriment uniquement leurs schémas aléatoires, sans réinitialiser les autres données. Le rôle de test doit pouvoir créer des schémas. Les variables déjà définies dans l’environnement sont prioritaires.
 
 Les tests couvrent les mentions, l’authentification, l’isolation des bibliothèques, la validation, les conflits de sauvegarde, les sessions expirées, les requêtes intersites, la limitation des tentatives et la persistance après redémarrage, la validation des images, leur confidentialité et leur sauvegarde, ainsi que les points de vue relationnels et la géométrie du graphe.
 
@@ -25,11 +32,11 @@ Les tests couvrent les mentions, l’authentification, l’isolation des bibliot
 
 Chaque compte possède sa bibliothèque ; le serveur déduit son propriétaire de la session et n’accepte aucun identifiant utilisateur fourni par le navigateur pour accéder aux données. Un nouvel utilisateur reçoit une copie indépendante de l’univers de démonstration.
 
-Les mots de passe sont hachés avec scrypt et un sel aléatoire. Les sessions durent sept jours et sont stockées sous forme hachée dans SQLite ; leur cookie est HttpOnly et SameSite=Lax (également Secure en production). La déconnexion révoque la session courante. Les écritures sont validées côté serveur ; les requêtes provenant d’un autre site sont refusées. L’API limite les tentatives d’authentification par IP (20 par 15 minutes ; compteur en mémoire, réinitialisé au redémarrage).
+Les mots de passe sont hachés avec scrypt et un sel aléatoire. Les sessions durent sept jours et sont stockées sous forme hachée dans PostgreSQL ; leur cookie est HttpOnly et SameSite=Lax (également Secure en production). La déconnexion révoque la session courante. Les écritures sont validées côté serveur ; les requêtes provenant d’un autre site sont refusées. L’API limite les tentatives d’authentification par IP (20 par 15 minutes ; compteur en mémoire, réinitialisé au redémarrage).
 
 Les modifications sont enregistrées automatiquement après une courte pause. Un indicateur signale les écritures en attente ou les échecs. La déconnexion attend la sauvegarde. En cas de coupure, utilisez « Réessayer » ou exportez les modifications. Un avertissement navigateur protège la fermeture d’une page contenant des modifications non enregistrées ; il ne constitue pas une sauvegarde garantie. En cas de conflit entre fenêtres, exportez votre travail puis rechargez la page pour récupérer la version du serveur : aucune version récente n’est écrasée silencieusement.
 
-Le stockage porte sur la bibliothèque complète au format JSON validé, versionnée par compteur de révision, dans une ligne SQLite par utilisateur. Limite de requête : **5 Mo**. Il ne s’agit pas encore d’un historique de versions ni d’un système de collaboration en temps réel.
+Le stockage porte sur la bibliothèque complète au format JSON validé, versionnée par compteur de révision, dans une ligne PostgreSQL JSONB par utilisateur. Limite de requête : **5 Mo**. Il ne s’agit pas encore d’un historique de versions ni d’un système de collaboration en temps réel.
 
 ## Récupérer les anciens projets locaux
 
@@ -42,22 +49,47 @@ L’export JSON de toute la bibliothèque reste disponible dans le pied de page 
 ```sh
 npm ci
 npm run build
-NODE_ENV=production APP_ORIGIN=https://atlas.example.com DATABASE_PATH=/chemin/persistant/atlas.sqlite npm start
+NODE_ENV=production APP_ORIGIN=https://atlas.example.com npm start
+# Définir DATABASE_URL avec les identifiants privés du serveur PostgreSQL.
 ```
 
 Le serveur sert `dist/` et `/api` depuis la même origine. Placez-le derrière un reverse proxy HTTPS. `APP_ORIGIN` doit correspondre exactement à l’adresse publique, sans slash final. Le cookie Secure nécessite HTTPS. `PORT` vaut 3001 et `HOST` vaut `0.0.0.0` par défaut. Les exemples de variables sont dans `.env.example` ; Node peut charger un fichier avec `node --env-file=.env server/index.js`. `npm run preview` affiche uniquement les fichiers statiques et ne remplace pas le serveur complet.
 
-Montez un **volume persistant** pour `DATABASE_PATH` et son dossier : SQLite utilise aussi les fichiers `-wal` et `-shm`. Le dossier `data/` et les fichiers de base sont exclus de Git. Une machine ou un disque éphémère supprimé peut perdre les données. SQLite convient ici à une instance serveur unique ; plusieurs réplicas nécessiteraient une architecture de stockage différente. `/api/health` vérifie la connexion à SQLite.
+Les comptes, sessions, projets et images sont conservés dans PostgreSQL. Configurez `DATABASE_URL` avec les identifiants de votre hébergeur et TLS vérifié (par exemple `sslmode=verify-full`, avec le certificat requis par le fournisseur). Aucun fichier SQLite n’est utilisé par le serveur. Le pool de connexions est partagé par les requêtes d’une instance ; les transactions et verrous PostgreSQL protègent les écritures concurrentes, y compris les quotas d’images. La limitation des connexions reste en mémoire par instance. `/api/health` vérifie PostgreSQL.
 
-## Sauvegardes
+En développement, Docker conserve les données dans le volume `postgres_data`. `docker compose down` les conserve ; **`docker compose down -v` les détruit**. Le mot de passe de `.env.example` est exclusivement destiné à la base locale, dont le port est limité à l’interface locale. Utilisez un secret privé en production. Changer le mot de passe du fichier `.env` ne change pas celui d’un volume déjà initialisé.
+
+## Transférer la base SQLite existante
+
+Arrêtez l’ancienne application pour éviter des écritures pendant le transfert. Conservez une sauvegarde SQLite cohérente avec ses éventuels fichiers WAL/SHM. Configurez `DATABASE_URL` vers une **base PostgreSQL vide**, démarrez PostgreSQL, puis exécutez :
 
 ```sh
-npm run backup
-# ou avec la même variable DATABASE_PATH que le serveur :
-DATABASE_PATH=/chemin/persistant/atlas.sqlite npm run backup -- /chemin/protege/sauvegarde.sqlite
+npm run migrate:sqlite -- ./data/lost-atlas.sqlite --dry-run
+npm run migrate:sqlite -- ./data/lost-atlas.sqlite
+npm run dev
 ```
 
-Le script utilise l’API de sauvegarde SQLite pour une copie cohérente même quand le serveur tourne. Il refuse d’écraser un fichier existant. Le fichier contient les données de tous les comptes : limitez son accès et conservez une copie hors de la machine. Pour restaurer, arrêtez le serveur, conservez une copie de la base actuelle et de ses fichiers WAL/SHM, puis remplacez la base par la sauvegarde avant de redémarrer.
+Le transfert conserve les comptes et leurs mots de passe hachés, les sessions, les révisions, les projets, les fiches, les relations et les images privées. Il s’effectue dans une transaction : une erreur annule tout le transfert. Le script refuse une destination contenant des données et ne modifie ni ne supprime le fichier SQLite. La vérification `--dry-run` contrôle la source et la destination sans importer de lignes (les tables vides sont créées si nécessaire). L’import des anciens projets stockés uniquement dans le navigateur reste disponible dans l’application.
+
+## Sauvegardes PostgreSQL
+
+Installez les outils clients PostgreSQL (`pg_dump` et `pg_restore`, version au moins égale à celle du serveur), puis :
+
+```sh
+npm run backup -- ./data/backups/atlas.dump
+# Si PostgreSQL est fourni par le Docker Compose local :
+PG_CONTAINER=$(docker compose ps -q db) npm run backup -- ./data/backups/atlas.dump
+```
+
+Le script utilise `DATABASE_URL` chargé depuis `.env`. Il produit une sauvegarde PostgreSQL cohérente au format personnalisé, incluant les images, et refuse d’écraser un fichier existant. Les fichiers sont créés avec des droits restreints. Conservez une copie protégée hors de la machine.
+
+Pour restaurer, arrêtez l’application et choisissez une **nouvelle base vide**. Avec les paramètres de connexion PostgreSQL (`PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`) configurés pour cette destination :
+
+```sh
+pg_restore --exit-on-error --single-transaction --no-owner --no-acl --dbname="$PGDATABASE" ./data/backups/atlas.dump
+```
+
+Basculez ensuite `DATABASE_URL` vers la base restaurée et redémarrez l’application. Les tests vérifient une véritable sauvegarde/restauration des projets et des octets d’images, ainsi que le transfert SQLite et l’annulation d’un import en erreur.
 
 ## Fiches détaillées et personnalisation
 
@@ -78,7 +110,7 @@ Dans l’onglet **Images** des fiches, ajoutez un portrait, une couverture et ju
 
 **Personnaliser le projet** permet de modifier son nom, son ambiance, sa description et sa couverture. Le bouton image de la barre du manuscrit personnalise la couverture du chapitre sans modifier son texte.
 
-Formats : **JPG, PNG, WebP**, 3 Mo et 25 mégapixels maximum par fichier. Le serveur vérifie le décodage, corrige l’orientation, retire les métadonnées, limite les dimensions à 2 000 pixels et stocke une version WebP. Les fichiers restent privés, servis uniquement à leur propriétaire et sans cache partagé. Les images sont stockées en BLOB dans la même base SQLite : la sauvegarde serveur les inclut automatiquement, sans dossier média à gérer.
+Formats : **JPG, PNG, WebP**, 3 Mo et 25 mégapixels maximum par fichier. Le serveur vérifie le décodage, corrige l’orientation, retire les métadonnées, limite les dimensions à 2 000 pixels et stocke une version WebP. Les fichiers restent privés, servis uniquement à leur propriétaire et sans cache partagé. Les images sont stockées en BYTEA dans la même base PostgreSQL : la sauvegarde serveur les inclut automatiquement, sans dossier média à gérer.
 
 Chaque compte dispose de 50 Mo de stockage d’images compressées. Les doublons sont réutilisés au sein d’un compte. Lors de l’import d’une nouvelle image, le serveur supprime les fichiers non référencés dont le dernier import remonte à plus de sept jours. Une image ancienne retirée d’un projet peut donc être purgée au prochain import. Le quota compte aussi les fichiers temporaires issus d’un import interrompu. Les images encore référencées dans les projets sont conservées. Les exports JSON emportent uniquement les images réellement utilisées par les projets exportés.
 

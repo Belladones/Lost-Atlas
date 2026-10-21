@@ -1,13 +1,11 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {once} from 'node:events';
-import {mkdtempSync,rmSync} from 'node:fs';
-import {tmpdir} from 'node:os';
-import {join} from 'node:path';
 import {createApp} from './app.js';
+import {testDatabase} from './test-database.js';
 import {initial} from '../src/model.js';
 async function setup(t,options={}){
- const app=createApp({dbPath:':memory:',...options});app.server.listen(0,'127.0.0.1');await once(app.server,'listening');
+ const app=await createApp({...await testDatabase(t),...options});app.server.listen(0,'127.0.0.1');await once(app.server,'listening');
  t.after(()=>new Promise(resolve=>app.server.close(resolve)));
  const base=`http://127.0.0.1:${app.server.address().port}`;
  async function request(path,{cookie,body,method=body?'POST':'GET',headers={}}={}){const r=await fetch(base+path,{method,headers:{'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{}),...headers},body:body?JSON.stringify(body):undefined});return {status:r.status,body:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0],headers:r.headers};}
@@ -16,7 +14,7 @@ async function setup(t,options={}){
 }
 test('inscription, session HttpOnly, connexion, déconnexion et mot de passe haché',async t=>{
  const {request,register,db}=await setup(t);const registered=await register();assert.equal(registered.status,200);assert.match(registered.headers.get('set-cookie'),/HttpOnly/);assert.match(registered.headers.get('set-cookie'),/SameSite=Lax/);
- const stored=db.prepare('SELECT password_hash FROM users').get().password_hash;assert.notEqual(stored,'correct horse battery staple');assert.match(stored,/^[a-f0-9]{32}:[a-f0-9]{128}$/);
+ const stored=(await db.query('SELECT password_hash FROM users')).rows[0].password_hash;assert.notEqual(stored,'correct horse battery staple');assert.match(stored,/^[a-f0-9]{32}:[a-f0-9]{128}$/);
  const cookie=registered.cookie;assert.equal((await request('/api/auth/me',{cookie})).body.user.email,'author@example.test');
  assert.equal((await request('/api/auth/login',{body:{email:'author@example.test',password:'wrong password here'}})).status,401);
  const login=await request('/api/auth/login',{body:{email:'AUTHOR@example.test',password:'correct horse battery staple'}});assert.equal(login.status,200);
@@ -51,11 +49,11 @@ test('limite les tentatives de connexion',async t=>{
  const r=await request('/api/auth/login',{body:{email:'bad',password:'bad'}});assert.equal(r.status,429);assert.ok(r.headers.get('retry-after'));
 });
 test('les comptes, sessions et projets survivent au redémarrage du serveur',async t=>{
- const dir=mkdtempSync(join(tmpdir(),'atlas-test-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));const path=join(dir,'db.sqlite');
- const first=createApp({dbPath:path});first.server.listen(0,'127.0.0.1');await once(first.server,'listening');const base=`http://127.0.0.1:${first.server.address().port}`;
+ const options=await testDatabase(t);
+ const first=await createApp(options);first.server.listen(0,'127.0.0.1');await once(first.server,'listening');const base=`http://127.0.0.1:${first.server.address().port}`;
  const registered=await fetch(base+'/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Auteur',email:'p@example.test',password:'persistent password 123'})});const cookie=registered.headers.get('set-cookie').split(';')[0];
  const data=structuredClone(initial);data.projects[0].chapters[0].text='Un manuscrit persistant.';const saved=await fetch(base+'/api/library',{method:'PUT',headers:{'Content-Type':'application/json',Cookie:cookie},body:JSON.stringify({data,revision:0})});assert.equal(saved.status,200);
- await new Promise(r=>first.server.close(r));const second=await setup(t,{dbPath:path});const result=await second.request('/api/library',{cookie});assert.equal(result.body.data.projects[0].chapters[0].text,'Un manuscrit persistant.');assert.equal(result.body.revision,1);
+ await new Promise(r=>first.server.close(r));const second=await setup(t,options);const result=await second.request('/api/library',{cookie});assert.equal(result.body.data.projects[0].chapters[0].text,'Un manuscrit persistant.');assert.equal(result.body.revision,1);
 });
 test('deux inscriptions simultanées ne créent pas de doublon',async t=>{
  const {register}=await setup(t);const results=await Promise.all([register(),register()]);assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
@@ -66,4 +64,9 @@ test('la suppression du dernier projet reste persistante et privée',async t=>{
  const loaded=await request('/api/library',{cookie:a.cookie});assert.deepEqual(loaded.body.data,{projects:[],active:null});
  assert.equal((await request('/api/library',{cookie:b.cookie})).body.data.projects.length,1);
  assert.equal((await request('/api/library',{cookie:a.cookie,method:'PUT',body:{data:initial,revision:loaded.body.revision}})).status,200);
+});
+test('deux sauvegardes simultanées avec la même révision ne peuvent pas s’écraser',async t=>{
+ const {request,register}=await setup(t);const {cookie}=await register();
+ const results=await Promise.all(['Version A','Version B'].map(name=>{const data=structuredClone(initial);data.projects[0].name=name;return request('/api/library',{cookie,method:'PUT',body:{data,revision:0}});}));
+ assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);assert.equal((await request('/api/library',{cookie})).body.revision,1);
 });

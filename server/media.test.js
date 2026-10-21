@@ -4,12 +4,13 @@ import {once} from 'node:events';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {DatabaseSync,backup} from 'node:sqlite';
+import {backupDatabase,restoreDatabase} from '../scripts/backup.js';
 import sharp from 'sharp';
 import {createApp} from './app.js';
+import {testDatabase} from './test-database.js';
 import {initial} from '../src/model.js';
 async function setup(t,options={}){
- const app=createApp({dbPath:':memory:',...options});app.server.listen(0,'127.0.0.1');await once(app.server,'listening');t.after(()=>new Promise(r=>app.server.close(r)));const base=`http://127.0.0.1:${app.server.address().port}`;
+ const app=await createApp({...await testDatabase(t),...options});app.server.listen(0,'127.0.0.1');await once(app.server,'listening');t.after(()=>new Promise(r=>app.server.close(r)));const base=`http://127.0.0.1:${app.server.address().port}`;
  const request=(path,{cookie,body,method=body?'POST':'GET'}={})=>fetch(base+path,{method,headers:{'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:body?JSON.stringify(body):undefined});
  async function register(email='media@example.test'){const r=await request('/api/auth/register',{body:{email,name:'Auteur',password:'image test password 123'}});assert.equal(r.status,200);return r.headers.get('set-cookie').split(';')[0];}
  return {...app,request,register};
@@ -46,14 +47,28 @@ test('enregistre les nouvelles sections, champs libres, rôles et références d
  data.projects[0].entities[0].portraitImage='https://evil.example/image.svg';assert.equal((await request('/api/library',{cookie,method:'PUT',body:{data,revision:1}})).status,400);
 });
 test('applique le quota avant d’écrire dans la base',async t=>{
- const {request,register,db}=await setup(t,{imageQuotaBytes:1});const cookie=await register();const r=await request('/api/media',{cookie,body:{data:(await png('#334455')).toString('base64')}});assert.equal(r.status,413);assert.equal(db.prepare('SELECT count(*) AS count FROM media').get().count,0);
+ const {request,register,db}=await setup(t,{imageQuotaBytes:1});const cookie=await register();const r=await request('/api/media',{cookie,body:{data:(await png('#334455')).toString('base64')}});assert.equal(r.status,413);assert.equal(Number((await db.query('SELECT count(*) AS count FROM media')).rows[0].count),0);
 });
 test('le nettoyage différé conserve les images encore utilisées',async t=>{
  let time=1_000_000;const {request,register}=await setup(t,{now:()=>time});let cookie=await register();const used=await upload(request,cookie,await png('#bb0000')),unused=await upload(request,cookie,await png('#0000bb'));const data=structuredClone(initial);data.projects[0].coverImage=used.id;assert.equal((await request('/api/library',{cookie,method:'PUT',body:{data,revision:0}})).status,200);
  time+=8*86400000;const login=await request('/api/auth/login',{body:{email:'media@example.test',password:'image test password 123'}});cookie=login.headers.get('set-cookie').split(';')[0];await upload(request,cookie,await png('#00bb00'));
  assert.equal((await request('/api/media/'+used.id,{cookie})).status,200);assert.equal((await request('/api/media/'+unused.id,{cookie})).status,404);
 });
-test('la sauvegarde SQLite inclut les images et les projets',async t=>{
- const {request,register,db}=await setup(t);const cookie=await register();const image=await upload(request,cookie,await png('#876543'));const data=structuredClone(initial);data.projects[0].coverImage=image.id;await request('/api/library',{cookie,method:'PUT',body:{data,revision:0}});
- const dir=mkdtempSync(join(tmpdir(),'atlas-media-backup-'));const file=join(dir,'backup.sqlite');try{await backup(db,file);const restored=new DatabaseSync(file,{readOnly:true});assert.equal(restored.prepare('PRAGMA integrity_check').get().integrity_check,'ok');const stored=restored.prepare('SELECT body FROM media WHERE id=?').get(image.id);assert.equal((await sharp(Buffer.from(stored.body)).metadata()).format,'webp');assert.equal(JSON.parse(restored.prepare('SELECT body FROM libraries').get().body).projects[0].coverImage,image.id);restored.close();}finally{rmSync(dir,{recursive:true,force:true});}
+test('la sauvegarde PostgreSQL restaure les images et les projets',async t=>{
+ const options=await testDatabase(t);const {request,register,db,server}=await setup(t,options);const cookie=await register();const image=await upload(request,cookie,await png('#876543'));const data=structuredClone(initial);data.projects[0].coverImage=image.id;await request('/api/library',{cookie,method:'PUT',body:{data,revision:0}});
+ const dir=mkdtempSync(join(tmpdir(),'atlas-media-backup-'));const file=join(dir,'backup.dump');
+ try{
+  await backupDatabase({connectionString:options.databaseUrl,target:file,schema:options.schema});
+  await db.query(`DROP SCHEMA ${options.schema} CASCADE`);
+  await restoreDatabase({connectionString:options.databaseUrl,source:file});
+  const stored=(await db.query('SELECT body FROM media WHERE id=$1',[image.id])).rows[0];
+  assert.equal((await sharp(stored.body).metadata()).format,'webp');assert.equal((await db.query('SELECT body FROM libraries')).rows[0].body.projects[0].coverImage,image.id);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+test('deux imports simultanés respectent le quota et dédupliquent les images',async t=>{
+ const source=await png('#223344');const normalized=await sharp(source).rotate().resize({width:2000,height:2000,fit:'inside',withoutEnlargement:true}).webp({quality:85}).toBuffer();
+ const {request,register,db}=await setup(t,{imageQuotaBytes:normalized.length+10});const cookie=await register();
+ const results=await Promise.all([source,source].map(bytes=>request('/api/media',{cookie,body:{data:bytes.toString('base64')}})));
+ assert.deepEqual(results.map(r=>r.status).sort(),[200,201]);const ids=await Promise.all(results.map(r=>r.json()));assert.equal(ids[0].id,ids[1].id);
+ const extra=await request('/api/media',{cookie,body:{data:(await png('#ff2222')).toString('base64')}});assert.equal(extra.status,413);assert.equal((await db.query('SELECT count(*)::integer AS n FROM media')).rows[0].n,1);
 });
