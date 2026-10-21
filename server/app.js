@@ -1,4 +1,6 @@
 import sharp from 'sharp';
+import {createOAuth} from './oauth.js';
+import {projectTheme} from './project-theme.js';
 import {mediaIds} from '../shared/media.js';
 import {createServer} from 'node:http';
 import {createDatabase} from './database.js';
@@ -10,7 +12,7 @@ import {credentialsSchema,librarySchema} from '../shared/schema.js';
 const scrypt=promisify(scryptCallback);
 const digest=s=>createHash('sha256').update(s).digest('hex');
 const DAY=86400000;
-export async function createApp({databaseUrl=process.env.DATABASE_URL,databaseUrlUnpooled=databaseUrl===process.env.DATABASE_URL?process.env.DATABASE_URL_UNPOOLED:undefined,schema,production=false,appOrigin,dist=resolve('dist'),now=Date.now,imageQuotaBytes=50*1024*1024}={}){
+export async function createApp({databaseUrl=process.env.DATABASE_URL,databaseUrlUnpooled=databaseUrl===process.env.DATABASE_URL?process.env.DATABASE_URL_UNPOOLED:undefined,schema,production=false,appOrigin,dist=resolve('dist'),now=Date.now,imageQuotaBytes=50*1024*1024,oauthEnv=process.env,oauthFetch=globalThis.fetch,themeImageLoader}={}){
  const db=await createDatabase({connectionString:databaseUrl,migrationConnectionString:databaseUrlUnpooled,schema});
  const attempts=new Map();
  const cookie=(token,maxAge)=>`atlas_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${production?'; Secure':''}`;
@@ -18,11 +20,13 @@ export async function createApp({databaseUrl=process.env.DATABASE_URL,databaseUr
  async function openSession(res,userId){const token=randomBytes(32).toString('hex');await db.query('DELETE FROM sessions WHERE expires_at<=$1',[now()]);await db.query('INSERT INTO sessions VALUES ($1,$2,$3)',[digest(token),userId,now()+7*DAY]);res.setHeader('Set-Cookie',cookie(token,7*86400));}
  function json(res,status,body){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(body));}
  async function body(req){let size=0,chunks=[];for await(const chunk of req){size+=chunk.length;if(size>5*1024*1024)throw {status:413,message:'Bibliothèque trop volumineuse (limite : 5 Mo).'};chunks.push(chunk);}try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw {status:400,message:'JSON invalide.'};}}
+ const handleOAuth=createOAuth({db,appOrigin,production,now,openSession,json,env:oauthEnv,fetch:oauthFetch});
  const server=createServer(async(req,res)=>{
   res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options','DENY');
   try{
    const url=new URL(req.url,'http://localhost');const path=url.pathname;
    if(path.startsWith('/api/')){
+    if(await handleOAuth(req,res,path))return;
     if(!['GET','HEAD','OPTIONS'].includes(req.method)){
      if(req.headers['sec-fetch-site']==='cross-site')return json(res,403,{error:'Origine non autorisée.'});
      if(req.headers.origin){const expected=appOrigin||`${production?'https':'http'}://${req.headers.host}`;if(req.headers.origin!==expected)return json(res,403,{error:'Origine non autorisée.'});}
@@ -48,6 +52,12 @@ export async function createApp({databaseUrl=process.env.DATABASE_URL,databaseUr
      await openSession(res,user.id);return json(res,200,{user:{id:user.id,email:user.email,name:user.name}});
     }
     const user=await session(req);if(!user)return json(res,401,{error:'Connectez-vous pour accéder à votre atelier.'});
+    if(path==='/api/project-theme'&&req.method==='GET'){
+     const library=(await db.query('SELECT body FROM libraries WHERE user_id=$1',[user.id])).rows[0].body;
+     const project=library.projects.find(p=>p.id===url.searchParams.get('projectId'));
+     if(!project)return json(res,404,{error:'Projet introuvable.'});
+     return json(res,200,await projectTheme({db,userId:user.id,cover:project.coverImage,loadImage:themeImageLoader}));
+    }
     if(path==='/api/auth/me'&&req.method==='GET')return json(res,200,{user});
     if(path==='/api/auth/logout'&&req.method==='POST'){
      const token=req.headers.cookie?.split(';').map(s=>s.trim()).find(s=>s.startsWith('atlas_session='))?.slice(14);

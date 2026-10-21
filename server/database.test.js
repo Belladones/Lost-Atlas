@@ -12,5 +12,5 @@ test('initialise le schéma avec la connexion directe séparée du pool applicat
  await db.close();
  const verification=new pg.Pool({connectionString:databaseUrl});t.after(()=>verification.end());
  const tables=(await verification.query('SELECT table_name FROM information_schema.tables WHERE table_schema=$1',[schema])).rows.map(row=>row.table_name).sort();
- assert.deepEqual(tables,['libraries','media','sessions','users']);
+ assert.deepEqual(tables,['libraries','media','oauth_flows','oauth_identities','sessions','users']);
 });

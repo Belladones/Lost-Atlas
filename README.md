@@ -172,3 +172,41 @@ L’interface utilise une direction artistique nocturne : charbon, ivoire, titra
 Il n’existe pas encore de validation d’email, récupération de mot de passe par email, gestion administrative des utilisateurs, partage entre auteurs, historique des versions ni partage public des médias. L’inscription est ouverte : configurez l’accès au site selon votre usage avant de l’exposer publiquement.
 
 Les mentions sont détectées dynamiquement en lecture et ouvrent une fiche par son identifiant. Après un changement de nom, conservez l’ancien nom dans les alias. Les références persistantes d’un éditeur riche restent une prochaine étape. Les illustrations sont en CSS et les polices utilisent les familles disponibles sur votre appareil, sans chargement externe. Aucun manuscrit n’est transmis à un service d’IA.
+
+## Connexion avec Google et Apple
+
+L’écran de connexion et d’inscription propose **Continuer avec Google** et **Continuer avec Apple**. Chaque fournisseur est activé uniquement quand ses variables sont configurées côté serveur et que `APP_ORIGIN` est une origine valide. Google et Apple créent une bibliothèque vide au premier accès. La connexion par email reste disponible. Aucun secret ne doit être préfixé par `VITE_` ni commité.
+
+Sur Render, renseignez `APP_ORIGIN=https://votre-site.example` sans slash final et `NODE_ENV=production`, puis ajoutez les variables suivantes dans **Environment** et redéployez :
+
+### Google
+
+Dans [Google Auth Platform](https://console.cloud.google.com/auth/clients), configurez l’écran de consentement et créez un client OAuth de type **Application Web**. Ajoutez comme URI de redirection autorisée **l’URL exacte** :
+
+```text
+https://votre-site.example/api/auth/oauth/google/callback
+```
+
+Copiez `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` dans Render. En mode test, ajoutez les utilisateurs autorisés dans la configuration Google ; pour un accès public, suivez les exigences de publication du fournisseur.
+
+### Apple
+
+Dans [Apple Developer](https://developer.apple.com/account/resources/identifiers/list/serviceId), configurez **Sign in with Apple** avec un App ID principal, un **Services ID** pour le site et une clé `.p8` autorisée. Déclarez le domaine et cette URL de retour exacte :
+
+```text
+https://votre-site.example/api/auth/oauth/apple/callback
+```
+
+Renseignez `APPLE_CLIENT_ID` (le Services ID), `APPLE_TEAM_ID`, `APPLE_KEY_ID` et `APPLE_PRIVATE_KEY` (contenu privé du fichier `.p8`). La clé accepte les vrais sauts de ligne ou la séquence `\n`. Apple nécessite une origine HTTPS et un compte développeur compatible. Le serveur génère automatiquement le secret client signé à courte durée. Les URL de retour locales HTTP ne conviennent pas à Apple.
+
+Les retours OAuth sont liés au navigateur par un état temporaire, un nonce et un cookie HttpOnly ; Google utilise aussi PKCE. Les ID tokens sont vérifiés cryptographiquement (signature, émetteur, audience, expiration et nonce). Le retour Apple `form_post` utilise un cookie Secure/SameSite=None dédié. Les jetons d’accès des fournisseurs ne sont pas conservés. Les comptes sont identifiés par le fournisseur et son identifiant de sujet ; une adresse email déjà utilisée ne provoque **aucune fusion automatique** : utilisez alors la méthode de connexion existante. L’association explicite de plusieurs méthodes à un compte n’est pas incluse.
+
+Sans identifiants réels Google/Apple, les boutons restent désactivés. Les tests utilisent des réponses OAuth simulées avec de vrais jetons signés et vérifient les signatures, les refus, les cookies et la création de comptes ; ils ne constituent pas une validation auprès des comptes réels des fournisseurs. Après configuration, validez les deux parcours sur votre domaine public.
+
+## Icône et fond des projets
+
+Le site utilise une icône **✧**, livrée en SVG avec l’application.
+
+Le fond de l’espace de travail prend automatiquement une **teinte très sombre et atténuée de la couleur dominante de la couverture du projet actif**. La luminosité reste proche du charbon d’origine pour préserver la lisibilité. La teinte est recalculée quand la couverture change et suit le projet sélectionné. Sans couverture, ou si son analyse échoue, le fond d’origine est conservé. Les images indisponibles continuent d’afficher leurs placeholders.
+
+L’analyse prend en charge les couvertures importées et les liens HTTPS publics vers des images décodables. Les images externes sont lues temporairement en mémoire pour extraire leur couleur, jamais ajoutées à la table des images. L’analyse limite la taille, les pixels et la durée ; elle bloque les réseaux privés et contrôle chaque redirection. Un cache temporaire évite de recharger la même couverture à chaque modification. Si un hébergeur refuse la lecture, le fond reste celui d’origine.

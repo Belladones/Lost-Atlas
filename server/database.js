@@ -25,7 +25,10 @@ export async function createDatabase({connectionString=process.env.DATABASE_URL,
     CREATE TABLE IF NOT EXISTS libraries (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,body JSONB NOT NULL,revision INTEGER NOT NULL DEFAULT 0 CHECK(revision>=0),updated_at BIGINT NOT NULL);
     CREATE TABLE IF NOT EXISTS media (id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,hash TEXT NOT NULL,body BYTEA NOT NULL,width INTEGER NOT NULL,height INTEGER NOT NULL,created_at BIGINT NOT NULL,UNIQUE(user_id,hash));
     CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);
-    CREATE INDEX IF NOT EXISTS media_owner ON media(user_id);`);
+    CREATE INDEX IF NOT EXISTS media_owner ON media(user_id);
+    CREATE TABLE IF NOT EXISTS oauth_identities(provider TEXT NOT NULL,subject TEXT NOT NULL,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,PRIMARY KEY(provider,subject));
+    CREATE TABLE IF NOT EXISTS oauth_flows(state_hash TEXT PRIMARY KEY,provider TEXT NOT NULL,browser_hash TEXT NOT NULL,verifier TEXT NOT NULL,nonce TEXT NOT NULL,expires_at BIGINT NOT NULL);
+    CREATE INDEX IF NOT EXISTS oauth_flows_expiry ON oauth_flows(expires_at);`);
   },migrationPool);
  }catch(error){await pool.end();throw error;}finally{if(migrationPool!==pool)await migrationPool.end();}
  let closing;

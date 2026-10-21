@@ -79,3 +79,6 @@ test('un nouveau compte reçoit une bibliothèque vide sans modifier les comptes
  assert.deepEqual((await request('/api/library',{cookie:b.cookie})).body,{data:{projects:[],active:null},revision:0});
  const preserved=(await request('/api/library',{cookie:a.cookie})).body;assert.equal(preserved.revision,1);assert.equal(preserved.data.projects[0].name,initial.projects[0].name);assert.equal(preserved.data.projects[0].entities.length,initial.projects[0].entities.length);
 });
+test('les connexions sociales restent désactivées sans configuration serveur',async t=>{
+ const {request}=await setup(t,{oauthEnv:{}});assert.deepEqual((await request('/api/auth/providers')).body,{google:false,apple:false});assert.equal((await request('/api/auth/oauth/google')).status,503);assert.equal((await request('/api/auth/oauth/apple')).status,503);
+});
