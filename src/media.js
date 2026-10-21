@@ -1,7 +1,7 @@
 import {api} from './account';
 import {librarySchema} from '../shared/schema';
-import {mediaIds,remapMedia} from '../shared/media';
-export const imageUrl=id=>`/api/media/${id}`;
+import {mediaIds,remapMedia,isExternalImage} from '../shared/media';
+export const imageUrl=id=>isExternalImage(id)?id:`/api/media/${id}`;
 export function fileBase64(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.onerror=()=>reject(Error('Impossible de lire le fichier.'));reader.readAsDataURL(file);});}
 export async function uploadImage(file){if(file.size>3*1024*1024)throw Error('Chaque image doit faire 3 Mo maximum.');return api('/api/media',{method:'POST',body:JSON.stringify({data:await fileBase64(file)})});}
 export function downloadJson(name,data){const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}

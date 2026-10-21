@@ -37,3 +37,11 @@ test('un import réattribue toutes les images sans altérer les textes et champs
  const {mediaIds,remapMedia}=await import('../shared/media.js');const data=structuredClone(initial),p=data.projects[0];p.coverImage='cover';p.chapters[0].coverImage='cover';p.entities[0].portraitImage='portrait';p.entities[0].coverImage='cover';p.entities[0].gallery=[{id:'gallery',caption:'Une idée'}];p.entities[0].customFields=[{id:'x',label:'Devise',value:'Ne pas oublier'}];
  assert.deepEqual(mediaIds(data),['cover','portrait','gallery']);const imported=remapMedia(data,new Map([['cover','new-cover'],['portrait','new-portrait'],['gallery','new-gallery']]));assert.deepEqual(mediaIds(imported),['new-cover','new-portrait','new-gallery']);assert.deepEqual(imported.projects[0].entities[0].customFields,p.entities[0].customFields);assert.equal(imported.projects[0].chapters[0].text,p.chapters[0].text);assert.equal(p.entities[0].portraitImage,'portrait');
 });
+
+test('les liens externes sont validés et exclus des images à transférer ou nettoyer',async()=>{
+ const {librarySchema}=await import('../shared/schema.js');const {mediaIds,remapMedia,isExternalImage}=await import('../shared/media.js');
+ const url='https://images.example.test/a.png?size=large',local='11111111-1111-4111-8111-111111111111';const data=structuredClone(initial),p=data.projects[0];p.coverImage=url;p.chapters[0].coverImage=url;p.entities[0].portraitImage=local;p.entities[0].coverImage=url;p.entities[0].gallery=[{id:url,caption:'Externe'},{id:local,caption:'Privée'}];
+ assert.equal(librarySchema.safeParse(data).success,true);assert.deepEqual(mediaIds(data),[local]);
+ const imported=remapMedia(data,new Map([[local,'22222222-2222-4222-8222-222222222222'],[url,'do-not-replace-url']]));assert.equal(imported.projects[0].coverImage,url);assert.equal(imported.projects[0].entities[0].gallery[0].id,url);assert.equal(imported.projects[0].entities[0].gallery[1].id,'22222222-2222-4222-8222-222222222222');
+ assert.equal(isExternalImage('https://example.test/a.png'),true);assert.equal(isExternalImage('https://'),false);assert.equal(isExternalImage('https://example.test/a b.png'),false);assert.equal(isExternalImage('https://user:secret@example.test/a.png'),false);
+});

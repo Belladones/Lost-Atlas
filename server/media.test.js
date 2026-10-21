@@ -44,7 +44,7 @@ test('enregistre les nouvelles sections, champs libres, rôles et références d
  const {request,register}=await setup(t);const cookie=await register();const image=await upload(request,cookie,await png('#994411'));const data=structuredClone(initial),p=data.projects[0],e=p.entities[0];
  p.coverImage=image.id;p.chapters[0].coverImage=image.id;e.portraitImage=image.id;e.coverImage=image.id;e.gallery=[{id:image.id,caption:'Une inspiration'}];e.character={age:'18',pronouns:'Elle',motivation:'Retrouver son frère',arc:'Apprendre à faire confiance'};e.customFields=[{id:'field-1',label:'Devise',value:'Ne jamais céder'}];e.role='Antagoniste';
  assert.equal((await request('/api/library',{cookie,method:'PUT',body:{data,revision:0}})).status,200);const saved=(await(await request('/api/library',{cookie})).json()).data.projects[0];assert.deepEqual(saved.entities[0].character,e.character);assert.deepEqual(saved.entities[0].gallery,e.gallery);assert.deepEqual(saved.entities[0].customFields,e.customFields);assert.equal(saved.coverImage,image.id);
- data.projects[0].entities[0].portraitImage='https://evil.example/image.svg';assert.equal((await request('/api/library',{cookie,method:'PUT',body:{data,revision:1}})).status,400);
+ data.projects[0].entities[0].portraitImage='javascript:alert(1)';assert.equal((await request('/api/library',{cookie,method:'PUT',body:{data,revision:1}})).status,400);
 });
 test('applique le quota avant d’écrire dans la base',async t=>{
  const {request,register,db}=await setup(t,{imageQuotaBytes:1});const cookie=await register();const r=await request('/api/media',{cookie,body:{data:(await png('#334455')).toString('base64')}});assert.equal(r.status,413);assert.equal(Number((await db.query('SELECT count(*) AS count FROM media')).rows[0].count),0);
@@ -71,4 +71,17 @@ test('deux imports simultanés respectent le quota et dédupliquent les images',
  const results=await Promise.all([source,source].map(bytes=>request('/api/media',{cookie,body:{data:bytes.toString('base64')}})));
  assert.deepEqual(results.map(r=>r.status).sort(),[200,201]);const ids=await Promise.all(results.map(r=>r.json()));assert.equal(ids[0].id,ids[1].id);
  const extra=await request('/api/media',{cookie,body:{data:(await png('#ff2222')).toString('base64')}});assert.equal(extra.status,413);assert.equal((await db.query('SELECT count(*)::integer AS n FROM media')).rows[0].n,1);
+});
+
+test('les liens HTTPS sont conservés sans importer les images dans PostgreSQL',async t=>{
+ const {request,register,db}=await setup(t);const cookie=await register();const data=structuredClone(initial),p=data.projects[0];const url='https://images.example.test/portrait.webp?v=2';
+ p.coverImage=url;p.chapters[0].coverImage=url;p.entities[0].portraitImage=url;p.entities[0].coverImage=url;p.entities[0].gallery=[{id:url,caption:'Image externe'}];
+ assert.equal((await request('/api/library',{cookie,method:'PUT',body:{data,revision:0}})).status,200);
+ const saved=(await(await request('/api/library',{cookie})).json()).data.projects[0];assert.equal(saved.coverImage,url);assert.equal(saved.chapters[0].coverImage,url);assert.equal(saved.entities[0].portraitImage,url);assert.equal(saved.entities[0].gallery[0].id,url);
+ assert.equal((await db.query('SELECT count(*)::integer AS n FROM media')).rows[0].n,0);
+ for(const invalid of ['http://images.example.test/a.jpg','javascript:alert(1)','data:image/png;base64,AAAA','file:///etc/passwd','/api/media/not-owned','https://user:secret@example.test/a.jpg','https://example.test/'+ 'x'.repeat(4096)]){
+  const changed=structuredClone(data);changed.projects[0].coverImage=invalid;
+  assert.equal((await request('/api/library',{cookie,method:'PUT',body:{data:changed,revision:1}})).status,400);
+ }
+ assert.equal((await(await request('/api/library',{cookie})).json()).revision,1);
 });
