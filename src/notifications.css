@@ -1,0 +1,6 @@
+/* Keep transient messages outside the page layout; stack them without overlap. */
+.notifications{position:fixed;right:24px;bottom:max(24px,env(safe-area-inset-bottom));z-index:100;display:flex;flex-direction:column;gap:12px;width:min(420px,calc(100vw - 48px));max-height:calc(100dvh - 48px);overflow-y:auto;pointer-events:none}
+.notifications>.sync-banner,.notifications>.warning,.notifications>.toast{position:static;inset:auto;transform:none;width:100%;margin:0;padding:16px 20px;box-sizing:border-box;text-align:left;line-height:1.6;overflow-wrap:anywhere;box-shadow:0 6px 28px #0006;pointer-events:auto}
+.notifications>.warning{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.notifications>.warning button{margin:0;text-align:left;padding:4px 0}
+@media(max-width:650px){.notifications{right:16px;bottom:max(16px,env(safe-area-inset-bottom));width:calc(100vw - 32px);max-height:calc(100dvh - 32px)}}
