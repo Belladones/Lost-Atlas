@@ -6,11 +6,11 @@ import sharp from 'sharp';
 import {createApp} from './app.js';
 import {testDatabase} from './test-database.js';
 import {loadExternalImage,isPublicAddress} from './project-theme.js';
-import {DEFAULT_BACKGROUND,darkCoverColor} from '../shared/theme.js';
+import {DEFAULT_BACKGROUND,darkCoverColor,coverColorFromPixels} from '../shared/theme.js';
 const solid=color=>sharp({create:{width:100,height:60,channels:3,background:color}}).png().toBuffer();
 
 test('les teintes de couverture restent sombres et discrètes',()=>{
- for(const source of [{r:255,g:0,b:0},{r:0,g:255,b:0},{r:0,g:0,b:255}]){const color=darkCoverColor(source);const values=color.slice(1).match(/../g).map(v=>parseInt(v,16));assert.ok(values.every(v=>v>=18&&v<=32));const dominant=Object.values(source).indexOf(255);assert.equal(values.indexOf(Math.max(...values)),dominant);}
+ for(const source of [{r:255,g:0,b:0},{r:0,g:255,b:0},{r:0,g:0,b:255}]){const color=darkCoverColor(source);const values=color.slice(1).match(/../g).map(v=>parseInt(v,16));assert.ok(values.every(v=>v>=18&&v<=46));const dominant=Object.values(source).indexOf(255);assert.equal(values.indexOf(Math.max(...values)),dominant);}
  assert.equal(darkCoverColor({r:90,g:90,b:90}),DEFAULT_BACKGROUND);
 });
 test('refuse les réseaux privés, métadonnées cloud, DNS mixtes et ports non HTTPS',async()=>{
@@ -40,7 +40,18 @@ test('le fond suit la couverture du projet et garde le fond initial en cas d’a
  await save();assert.deepEqual(await theme(),{color:DEFAULT_BACKGROUND});
  const uploaded=await fetch(base+'/api/media',{method:'POST',headers:{'Content-Type':'application/json',Cookie:cookie},body:JSON.stringify({data:(await solid('#ee3322')).toString('base64')})});project.coverImage=(await uploaded.json()).id;await save();const red=(await theme()).color;assert.notEqual(red,DEFAULT_BACKGROUND);assert.ok(parseInt(red.slice(1,3),16)>parseInt(red.slice(5,7),16));
  project.coverImage='https://images.example.test/blue.png';await save();const blue=(await theme()).color;assert.notEqual(blue,red);assert.equal(loads,1);assert.equal((await theme()).color,blue);assert.equal(loads,1);
- project.coverImage='https://images.example.test/missing.png';await save();assert.deepEqual(await theme(),{color:DEFAULT_BACKGROUND});
+ project.coverImage='https://images.example.test/missing.png';await save();assert.deepEqual(await theme(),{color:DEFAULT_BACKGROUND,unavailable:true});
  project.coverImage=null;await save();assert.deepEqual(await theme(),{color:DEFAULT_BACKGROUND});
  assert.equal((await fetch(base+'/api/project-theme?projectId=another',{headers:{Cookie:cookie}})).status,404);assert.equal((await fetch(base+'/api/project-theme?projectId='+project.id)).status,401);
+});
+
+test('une couverture majoritairement grise conserve la teinte de sa zone colorée',async()=>{
+ const image=await sharp({create:{width:100,height:100,channels:3,background:'#777777'}}).composite([{input:await sharp({create:{width:100,height:35,channels:3,background:'#345aaf'}}).png().toBuffer(),top:65,left:0}]).ensureAlpha().raw().toBuffer();
+ const color=coverColorFromPixels(image);assert.notEqual(color,DEFAULT_BACKGROUND);const values=color.slice(1).match(/../g).map(v=>parseInt(v,16));assert.ok(values[2]>values[0]+8);assert.ok(values.every(v=>v>=18&&v<=46));
+ const transparent=new Uint8Array([255,0,0,0,255,0,0,0]);assert.equal(coverColorFromPixels(transparent),DEFAULT_BACKGROUND);
+});
+test('fournit toutes les adresses publiques et privilégie IPv4 sans perdre le secours IPv6',async()=>{
+ const addresses=[{address:'2606:4700:4700::1111',family:6},{address:'8.8.8.8',family:4}];let checked=false;
+ const httpsRequest=(_url,options,callback)=>{assert.equal(options.autoSelectFamily,true);options.lookup('image.example.test',{all:true},(_error,pinned)=>{assert.deepEqual(pinned,[addresses[1],addresses[0]]);checked=true;});const req=new EventEmitter();req.setTimeout=()=>{};req.end=()=>queueMicrotask(()=>{const res=Readable.from([Buffer.from('image')]);res.statusCode=200;res.headers={};callback(res);res.on('end',()=>req.emit('close'));});return req;};
+ await loadExternalImage('https://image.example.test/a.png',{resolveHost:async()=>addresses,httpsRequest});assert.equal(checked,true);
 });
