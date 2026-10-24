@@ -171,7 +171,7 @@ L’interface utilise une direction artistique nocturne : charbon, ivoire, titra
 
 Il n’existe pas encore de validation d’email, récupération de mot de passe par email, gestion administrative des utilisateurs, partage entre auteurs, historique des versions ni partage public des médias. L’inscription est ouverte : configurez l’accès au site selon votre usage avant de l’exposer publiquement.
 
-Les mentions sont détectées dynamiquement en lecture et ouvrent une fiche par son identifiant. Après un changement de nom, conservez l’ancien nom dans les alias. Les références persistantes d’un éditeur riche restent une prochaine étape. Les illustrations sont en CSS et les polices utilisent les familles disponibles sur votre appareil, sans chargement externe. Aucun manuscrit n’est transmis à un service d’IA.
+Les mentions sont détectées dynamiquement en lecture et ouvrent une fiche par son identifiant. Après un changement de nom, conservez l’ancien nom dans les alias. Les références persistantes d’un éditeur riche restent une prochaine étape. Les illustrations sont en CSS et les polices utilisent les familles disponibles sur votre appareil, sans chargement externe. Aucun manuscrit n’est transmis à OpenAI par défaut ; le connecteur ChatGPT facultatif transmet uniquement les contenus consultés des projets explicitement autorisés, après consentement.
 
 ## Connexion avec Google
 
@@ -194,6 +194,33 @@ Les retours OAuth Google utilisent un état temporaire, un nonce, PKCE et un coo
 ## Profil et sécurité
 
 Cliquez sur votre profil en bas à gauche pour ouvrir les paramètres. Vous pouvez modifier votre nom d’auteur. L’adresse email est affichée en lecture seule. Les comptes email peuvent modifier leur mot de passe en fournissant le mot de passe actuel et un nouveau d’au moins 12 caractères ; les autres sessions sont alors révoquées. Les comptes Google gèrent leur mot de passe chez Google.
+
+## Connexion depuis ChatGPT (MCP)
+
+Le connecteur permet à ChatGPT de rechercher et de lire vos personnages, lieux, organisations, relations et chapitres : « Consulte les fiches de Cassie et Léo et aide-moi à écrire leur prochaine rencontre. » Il est **en lecture seule** : aucune création, modification ou suppression de texte n’est exposée. Les propositions de ChatGPT ne sont pas enregistrées dans Lost Atlas. Les images, les identifiants de connexion et le mot de passe Lost Atlas ne sont pas transmis.
+
+Dans ChatGPT, ajoutez le serveur MCP avec OAuth depuis les réglages de votre offre, puis connectez-vous sur Lost Atlas. **La disponibilité des connecteurs MCP personnalisés dépend de votre offre et des réglages de votre espace ChatGPT.** L’écran Lost Atlas ne présélectionne aucun projet : choisissez les projets et acceptez explicitement le partage des contenus consultés avec OpenAI pour traiter vos demandes. Les nouveaux projets restent exclus. La connexion expire après 30 jours.
+
+Dans **Profil et paramètres → Connexion depuis ChatGPT**, retrouvez l’adresse du serveur, modifiez la sélection des projets ou révoquez chaque connexion. La révocation bloque les accès futurs, y compris le renouvellement des jetons. Elle ne supprime pas les passages déjà transmis à OpenAI ; gérez leur conservation depuis ChatGPT selon les paramètres et conditions de votre offre.
+
+### Configuration de l’hébergement
+
+Le connecteur est désactivé tant que ces deux variables ne sont pas valides :
+
+- `APP_ORIGIN` : l’origine HTTPS publique exacte de Lost Atlas, sans slash final, par exemple `https://atlas.example.com`.
+- `MCP_REDIRECT_URIS` : les URI de retour OAuth **exactes fournies par ChatGPT**, séparées par des virgules. Copiez uniquement les retours de l’application ChatGPT que vous souhaitez autoriser ; n’ajoutez pas d’URI d’un tiers. Aucun joker, fragment ou paramètre de requête n’est accepté. Ces valeurs ne sont pas des secrets.
+
+Redémarrez le serveur après configuration. Dans ChatGPT, utilisez `https://votre-site.example/mcp` et l’authentification OAuth. L’inscription dynamique des clients est prise en charge ; aucun secret OpenAI ni mot de passe Lost Atlas n’est à saisir dans ChatGPT. Si votre interface ChatGPT demande un client préenregistré, l’administrateur peut enregistrer les retours autorisés par `POST /register` avec `redirect_uris` et `token_endpoint_auth_method: "client_secret_post"`, puis conserver en lieu sûr les identifiants renvoyés une seule fois. Les secrets de clients et les jetons sont stockés sous forme de condensats en base, jamais dans les journaux applicatifs. N’activez pas la journalisation des corps OAuth, des en-têtes Authorization ou des URL de retour contenant un code dans votre proxy.
+
+Le proxy HTTPS doit préserver l’en-tête `Host` public et acheminer `/mcp`, `/authorize`, `/token`, `/register`, `/revoke` et `/.well-known/` vers le serveur Node, ainsi que `/api`. Ne mettez pas ces routes en cache. Le frontend de production est servi par ce même serveur. La découverte OAuth est publiée dans `/.well-known/oauth-protected-resource/mcp` et `/.well-known/oauth-authorization-server`.
+
+Le parcours utilise OAuth avec codes à usage unique (5 minutes), PKCE S256 obligatoire, état OAuth et consentement lié au navigateur (10 minutes). Les jetons d’accès durent 15 minutes ; les jetons de renouvellement tournent à chaque usage, sans dépasser la durée de l’autorisation. Rejouer un ancien jeton de renouvellement révoque toute sa connexion. Chaque requête et chaque outil vérifient la validité de l’autorisation ; les lectures sont limitées à la bibliothèque du propriétaire et à la sélection courante des projets. Le scope unique est `atlas:read`, lié à la ressource `/mcp`. Les contrôles d’origine du site restent appliqués aux paramètres et au consentement ; l’API du compte n’accepte pas les jetons MCP comme sessions.
+
+Outils : `list_projects`, `search`, `fetch`, `get_entity`, `list_chapters`, `read_chapter`. La recherche couvre aussi les alias et les champs détaillés des fiches. Les sommaires suivent l’ordre du manuscrit. Les réponses longues sont paginées (`nextOffset`) pour éviter de transmettre toute la bibliothèque ; les images ne sont pas chargées. Les liens de citation ouvrent les éléments uniquement si le compte connecté les possède.
+
+### Validation locale
+
+`npm test` comprend un parcours avec le client SDK MCP réel, la découverte OAuth, le consentement et le refus, les contrôles PKCE/client/retour/audience, l’isolation des comptes et projets, la pagination, l’expiration, le renouvellement et la révocation. Les tests utilisent des schémas PostgreSQL temporaires et n’appellent pas ChatGPT. Pour vérifier le navigateur en développement, configurez `APP_ORIGIN=http://127.0.0.1:5173` et une URI de retour de test exacte ; HTTP n’est accepté que sur la boucle locale hors production. Vite transmet aussi les routes MCP et OAuth à l’API. La connexion effective à ChatGPT nécessite ensuite un déploiement public HTTPS et une validation dans votre compte ChatGPT compatible.
 
 ## Icône et fond des projets
 

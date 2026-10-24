@@ -1,2 +1,3 @@
 import {defineConfig} from 'vite';
-export default defineConfig({server:{host:'0.0.0.0',port:5173,strictPort:true,proxy:{'/api':{target:'http://127.0.0.1:3001',changeOrigin:false}}}});
+const proxy=Object.fromEntries(['/api','/mcp','/authorize','/token','/register','/revoke','/.well-known'].map(path=>[path,{target:'http://127.0.0.1:3001',changeOrigin:false}]));
+export default defineConfig({server:{host:'0.0.0.0',port:5173,strictPort:true,proxy}});
