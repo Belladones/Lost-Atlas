@@ -1,11 +1,14 @@
-import {entitySchema,chapterSchema,librarySchema} from '../shared/schema.js';
+import {entitySchema,chapterSchema,librarySchema,relationSchema} from '../shared/schema.js';
 import {characterSections} from '../shared/character.js';
 import {isExternalImage} from '../shared/media.js';
 export const importTypes=['Personnage','Lieu','Organisation','Chapitre'];
 export const importLimit=200;
 const normalize=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
 const characterColumns=characterSections.flatMap(s=>s.fields.map(([key,label])=>[normalize(label),key]));
-export function importColumns(type){return type==='Chapitre'?['titre','texte','statut','image_couverture']:['nom','alias','role','description','image_portrait','image_couverture',...(type==='Personnage'?characterColumns.map(([column])=>column):[])];}
+const relationFields=['relation_cible','relation_libelle','relation_description','relation_description_inverse'];
+const relationColumn=(field,index)=>field+(index?'_'+(index+1):'');
+const relationColumns=Array.from({length:10},(_,index)=>relationFields.map(field=>relationColumn(field,index))).flat();
+export function importColumns(type){return type==='Chapitre'?['titre','texte','statut','image_couverture']:['nom','alias','role','description','image_portrait','image_couverture',...(type==='Personnage'?[...characterColumns.map(([column])=>column),...relationColumns]:[])];}
 export function importTemplate(type){
  if(!importTypes.includes(type))throw Error('Type d’import inconnu.');
  const examples={Personnage:{nom:'Maëlys',alias:'Mae',role:'Protagoniste',description:'Une cartographe en quête d’un rivage oublié.',age:'28',pronoms:'elle'},Lieu:{nom:'Le phare des Brumes',role:'Refuge',description:'Un phare au bord des îles oubliées.'},Organisation:{nom:'La Guilde des Cartographes',role:'Guilde',description:'Ses membres dessinent les frontières du monde.'},Chapitre:{titre:'Le dernier phare',texte:'Maëlys ouvre enfin la carte.\n\nUne nouvelle histoire commence.',statut:'Idée'}};
@@ -44,7 +47,15 @@ export function readRecordImport(source,type){
   else record={id:crypto.randomUUID(),name:fields.nom.trim(),type,alias:fields.alias?.trim()||'',role:fields.role?.trim()||'',description:fields.description||'',symbol:Array.from(fields.nom.trim()).slice(0,2).join('').toUpperCase(),portraitImage:fields.image_portrait?.trim()||null,coverImage:cover,...(type==='Personnage'?{character:Object.fromEntries(characterColumns.filter(([column])=>fields[column]).map(([column,key])=>[key,fields[column]]))}:{})};
   const parsed=(type==='Chapitre'?chapterSchema:entitySchema).safeParse(record);
   if(!parsed.success){const issue=parsed.error.issues[0];errors.push(`${prefix} : ${type==='Chapitre'&&issue.path[0]==='status'?'statut attendu : Idée, En cours ou Terminé.':'champ « '+issue.path.join('.')+' » invalide ou trop long.'}`);return;}
-  records.push(parsed.data);
+  const relations=[];
+  if(type==='Personnage')for(let slot=0;slot<10;slot++){
+   const [target,label,fromDescription,toDescription]=relationFields.map(field=>fields[relationColumn(field,slot)]?.trim()||'');
+   if(!target&&!label&&!fromDescription&&!toDescription)continue;
+   if(!target||!label){errors.push(`${prefix} : relation ${slot+1}, cible et libellé obligatoires.`);return;}
+   if(!relationSchema.safeParse({from:'source',to:'target',label,fromDescription,toDescription}).success||target.length>150){errors.push(`${prefix} : relation ${slot+1} invalide ou trop longue.`);return;}
+   relations.push({target,label,fromDescription,toDescription});
+  }
+  records.push({...parsed.data,...(relations.length?{_importRelations:relations}:{})});
  });
  if(errors.length)throw Error(errors.slice(0,8).join('\n')+(errors.length>8?`\n… et ${errors.length-8} autre(s) erreur(s).`:''));return records;
 }
@@ -52,9 +63,24 @@ export function planRecordImport(project,type,records,skipDuplicates=true){
  const chapter=type==='Chapitre',key=chapter?'title':'name',existing=chapter?project.chapters:project.entities.filter(e=>e.type===type);const seen=new Set(existing.map(e=>e[key].trim().toLocaleLowerCase('fr')));
  return records.map(record=>{const value=record[key].trim().toLocaleLowerCase('fr'),duplicate=seen.has(value);seen.add(value);return{record,duplicate,skip:skipDuplicates&&duplicate};});
 }
+export function resolveImportRelations(project,records){
+ const entities=[...project.entities,...records.map(({_importRelations,...record})=>record)],relations=[];
+ const key=name=>name.trim().normalize('NFC').toLocaleLowerCase('fr');
+ for(const record of records)for(const relation of record._importRelations||[]){
+  const byId=entities.filter(e=>e.id===relation.target);
+  const matches=byId.length?byId:entities.filter(e=>key(e.name)===key(relation.target));
+  if(matches.length!==1)throw Error(`Relation de « ${record.name} » : cible « ${relation.target} » ${matches.length?'ambiguë, utilisez son identifiant':'introuvable dans les fiches existantes ou les personnages à importer'}.`);
+  const {target,...details}=relation;
+  const candidate={id:crypto.randomUUID(),from:record.id,to:matches[0].id,...details};
+  if(!relations.some(r=>r.from===candidate.from&&r.to===candidate.to&&r.label===candidate.label&&r.fromDescription===candidate.fromDescription&&r.toDescription===candidate.toDescription))relations.push(candidate);
+ }
+ return relations;
+}
 export function appendRecordImport(data,projectId,type,records){
  const project=data.projects.find(p=>p.id===projectId);if(!project)throw Error('Le projet n’existe plus.');if(!records.length)throw Error('Aucun élément à importer.');
- const key=type==='Chapitre'?'chapters':'entities';const next={...data,projects:data.projects.map(p=>p.id===projectId?{...p,[key]:[...p[key],...records]}:p)};
+ const relations=type==='Personnage'?resolveImportRelations(project,records):[];
+ const clean=records.map(({_importRelations,...record})=>record);
+ const key=type==='Chapitre'?'chapters':'entities';const next={...data,projects:data.projects.map(p=>p.id===projectId?{...p,[key]:[...p[key],...clean],relations:[...p.relations,...relations]}:p)};
  if(!librarySchema.safeParse(next).success)throw Error('L’import dépasse les limites du projet ou contient des données invalides.');
  if(new TextEncoder().encode(JSON.stringify({data:next,revision:0})).length>5*1024*1024-1024)throw Error('La bibliothèque dépasserait la limite de 5 Mo. Réduisez le fichier à importer.');return next;
 }

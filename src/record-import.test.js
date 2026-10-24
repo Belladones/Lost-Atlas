@@ -19,3 +19,23 @@ test('les doublons sont signalés par type, jamais remplacés, et l’import pr�
  assert.equal(planRecordImport(project,'Personnage',records,false).filter(p=>!p.skip).length,3);const next=appendRecordImport(data,project.id,'Personnage',plan.filter(p=>!p.skip).map(p=>p.record));assert.equal(next.projects[0].entities.length,5);assert.deepEqual(next.projects[0].relations,project.relations);assert.equal(JSON.stringify(data),original);
  const chapters=readRecordImport('titre;texte\nUn;Première page\nDeux;Seconde page','Chapitre');const appended=appendRecordImport(next,project.id,'Chapitre',chapters);assert.deepEqual(appended.projects[0].chapters.slice(-2).map(c=>c.title),['Un','Deux']);assert.throws(()=>appendRecordImport(data,'missing','Lieu',records));
 });
+test('importe plusieurs relations vers les fiches existantes et les personnages du fichier, avec les deux points de vue',()=>{
+ const data=structuredClone(initial),project=data.projects[0],target=project.entities[0],before=JSON.stringify(data);
+ const csv='nom;relation_cible;relation_libelle;relation_description;relation_description_inverse;relation_cible_2;relation_libelle_2\nNouvelle;'+target.id+';Ami;Elle lui fait confiance;Il la protège;Autre;Rival\nAutre;;;;;;';
+ const records=readRecordImport(csv,'Personnage'),next=appendRecordImport(data,project.id,'Personnage',records),p=next.projects[0],added=p.relations.slice(project.relations.length);
+ assert.equal(added.length,2);assert.equal(added[0].from,records[0].id);assert.equal(added[0].to,target.id);assert.equal(added[0].fromDescription,'Elle lui fait confiance');assert.equal(added[0].toDescription,'Il la protège');assert.equal(added[1].to,records[1].id);assert.notEqual(added[0].id,added[1].id);
+ assert.deepEqual(p.relations.slice(0,project.relations.length),project.relations);assert.equal('_importRelations' in p.entities.at(-2),false);assert.equal(JSON.stringify(data),before);
+});
+test('refuse les relations incomplètes, trop longues, absentes ou ambiguës sans ajout partiel',()=>{
+ for(const csv of ['nom;relation_cible\nA;B','nom;relation_libelle\nA;Ami','nom;relation_cible;relation_libelle\nA;B;'+ 'x'.repeat(1001)])assert.throws(()=>readRecordImport(csv,'Personnage'),/relation/);
+ const data=structuredClone(initial),project=data.projects[0],before=JSON.stringify(data);
+ const missing=readRecordImport('nom;relation_cible;relation_libelle\nA;Inconnu;Ami','Personnage');assert.throws(()=>appendRecordImport(data,project.id,'Personnage',missing),/introuvable/);assert.equal(JSON.stringify(data),before);
+ const ambiguous=readRecordImport('nom;relation_cible;relation_libelle\nA;B;Ami\nB;;\nB;;','Personnage');assert.throws(()=>appendRecordImport(data,project.id,'Personnage',ambiguous),/ambiguë/);
+});
+test('les relations respectent les doublons ignorés et restent limitées au projet destination',()=>{
+ const data=structuredClone(initial),project=data.projects[0],target=project.entities.find(e=>e.type==='Personnage');
+ const csv='nom;relation_cible;relation_libelle\n'+target.name+';Absent;Rival\nNouvelle;'+target.name+';Ami';
+ const selected=planRecordImport(project,'Personnage',readRecordImport(csv,'Personnage')).filter(p=>!p.skip).map(p=>p.record);
+ const next=appendRecordImport(data,project.id,'Personnage',selected);assert.equal(next.projects[0].relations.length,project.relations.length+1);assert.equal(next.projects[0].relations.at(-1).to,target.id);
+ const foreign=readRecordImport('nom;relation_cible;relation_libelle\nAutre;Étranger;Ami','Personnage');data.projects.push({...structuredClone(project),id:'foreign',entities:[{...target,id:'foreign-person',name:'Étranger'}],relations:[]});assert.throws(()=>appendRecordImport(data,project.id,'Personnage',foreign),/introuvable/);
+});

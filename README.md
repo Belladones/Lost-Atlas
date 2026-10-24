@@ -255,6 +255,19 @@ Les titres de chapitre n’apparaissent qu’au début de chaque chapitre, et le
 
 Dans **Encyclopédie → Importer des éléments** ou **Manuscrit → Importer des chapitres**, sélectionnez Personnage, Lieu, Organisation ou Chapitre et téléchargez son modèle CSV. Remplacez la ligne d’exemple par vos données, en conservant les en-têtes, puis exportez en **CSV UTF-8** depuis votre tableur. Les séparateurs point-virgule et virgule, les cellules entre guillemets et les textes sur plusieurs lignes sont pris en charge. Le modèle personnage comprend les champs détaillés de sa fiche.
 
+Le modèle personnage comprend aussi jusqu’à dix relations par ligne. Renseignez `relation_cible` (nom exact d’une fiche ou identifiant), `relation_libelle`, puis éventuellement `relation_description` et `relation_description_inverse`. Le premier texte explique le lien du personnage importé vers la cible, le second le sens inverse. Répétez avec les suffixes `_2` à `_10` pour ajouter plusieurs liens. Les colonnes inutilisées peuvent être laissées vides ou supprimées.
+
+La cible peut être un personnage, un lieu ou une organisation du projet, ou un autre personnage du même import, même situé après dans le fichier. Les noms sont comparés sans tenir compte des majuscules ; utilisez un identifiant en cas de noms identiques. Une cible absente ou ambiguë bloque tout l’import et apparaît dans l’aperçu. Les relations des lignes ignorées comme doublons ne sont pas ajoutées. Les relations déjà présentes sont conservées.
+
+Exemple minimal :
+
+```csv
+nom;relation_cible;relation_libelle;relation_description;relation_description_inverse
+Alice;Bob;Amitié;Elle lui confie ses secrets;Il veille sur elle
+Bob;;;;
+```
+
+
 Seuls `nom` (fiches) et `titre` (chapitres) sont obligatoires ; les colonnes facultatives peuvent être omises. Les chapitres acceptent les statuts `Idée`, `En cours` et `Terminé` (`Idée` par défaut). Les images utilisent des liens HTTPS, sans import de fichiers binaires. Les colonnes disponibles et leurs règles figurent aussi dans la fenêtre d’import.
 
 Choisissez le fichier, consultez l’aperçu et confirmez l’ajout au projet actif. Les noms ou titres déjà présents dans le même type sont signalés et ignorés par défaut, y compris les répétitions dans le fichier ; décochez l’option pour les conserver comme nouveaux éléments. Aucun élément existant n’est remplacé. Les chapitres sont ajoutés à la fin, dans l’ordre des lignes. Annuler ou fournir un fichier invalide n’ajoute rien.
