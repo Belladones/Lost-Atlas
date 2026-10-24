@@ -25,17 +25,15 @@ import {BookReader} from './book-reader';
 import {RecordImportDialog} from './record-import.jsx';
 import {appendRecordImport} from './record-import.js';
 import {moveChapter} from './manuscript';
-import {atlasLink} from './atlas-links';
 function hasLegacy(){try{return !!localStorage.getItem('lost-atlas-v1');}catch{return false;}}
 function saveFile(name,body,type='text/plain'){const url=URL.createObjectURL(new Blob([body],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 const icons={Personnage:Users,Lieu:MapPin,Organisation:Building2};
 function App({data:initialData,revision,user,onLogout,onUserChange}){
- const [entry]=useState(()=>atlasLink(initialData,location.search));
  const [recordImport,setRecordImport]=useState(null);
  const appearance=useAppearanceSettings();const [settingsOpen,setSettingsOpen]=useState(false);
  const [failedCover,setFailedCover]=useState(null);
- const {data,commit,status:saveStatus,message:saveError,flush}=useServerLibrary(entry.projectId?{...initialData,active:entry.projectId}:initialData,revision);
- const [page,setPage]=useState(entry.chapterId?'write':'overview'),[selected,setSelected]=useState(entry.entityId),[modal,setModal]=useState(null),[query,setQuery]=useState(''),[chapterId,setChapterId]=useState(entry.chapterId),[reading,setReading]=useState(false),[notice,setNotice]=useState(''),[mobile,setMobile]=useState(false),[deletion,setDeletion]=useState(null),[editorBusy,setEditorBusy]=useState(false),[importBusy,setImportBusy]=useState(false);
+ const {data,commit,status:saveStatus,message:saveError,flush}=useServerLibrary(initialData,revision);
+ const [page,setPage]=useState('overview'),[selected,setSelected]=useState(null),[modal,setModal]=useState(null),[query,setQuery]=useState(''),[chapterId,setChapterId]=useState(null),[reading,setReading]=useState(false),[notice,setNotice]=useState(''),[mobile,setMobile]=useState(false),[deletion,setDeletion]=useState(null),[editorBusy,setEditorBusy]=useState(false),[importBusy,setImportBusy]=useState(false);
  const project=data.projects.find(p=>p.id===data.active)||data.projects[0]||{id:null,name:'Ma bibliothèque',entities:[],chapters:[],relations:[]};
  const themeColor=useProjectColor({project,ready:saveStatus==='saved',unavailable:failedCover===project.coverImage,enabled:appearance.loaded&&appearance.adaptiveTheme});
  const palette=useMemo(()=>appearancePalette(themeColor,themeColors),[themeColor]);

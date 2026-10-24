@@ -30,13 +30,8 @@ export async function createDatabase({connectionString=process.env.DATABASE_URL,
     CREATE TABLE IF NOT EXISTS oauth_flows(state_hash TEXT PRIMARY KEY,provider TEXT NOT NULL,browser_hash TEXT NOT NULL,verifier TEXT NOT NULL,nonce TEXT NOT NULL,expires_at BIGINT NOT NULL);
     CREATE INDEX IF NOT EXISTS oauth_flows_expiry ON oauth_flows(expires_at);
     CREATE TABLE IF NOT EXISTS user_settings(user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,body JSONB NOT NULL);
-    CREATE TABLE IF NOT EXISTS mcp_clients(client_id TEXT PRIMARY KEY,metadata JSONB NOT NULL,created_at BIGINT NOT NULL);
-    CREATE TABLE IF NOT EXISTS mcp_requests(id_hash TEXT PRIMARY KEY,browser_hash TEXT NOT NULL,client_id TEXT NOT NULL REFERENCES mcp_clients(client_id) ON DELETE CASCADE,parameters JSONB NOT NULL,expires_at BIGINT NOT NULL);
-    CREATE TABLE IF NOT EXISTS mcp_grants(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,client_id TEXT NOT NULL REFERENCES mcp_clients(client_id) ON DELETE CASCADE,project_ids JSONB NOT NULL,created_at BIGINT NOT NULL,expires_at BIGINT NOT NULL,revoked_at BIGINT);
-    CREATE INDEX IF NOT EXISTS mcp_grants_owner ON mcp_grants(user_id);
-    CREATE TABLE IF NOT EXISTS mcp_codes(code_hash TEXT PRIMARY KEY,grant_id TEXT NOT NULL REFERENCES mcp_grants(id) ON DELETE CASCADE,challenge TEXT NOT NULL,redirect_uri TEXT NOT NULL,resource TEXT NOT NULL,expires_at BIGINT NOT NULL);
-    CREATE TABLE IF NOT EXISTS mcp_tokens(access_hash TEXT PRIMARY KEY,refresh_hash TEXT UNIQUE NOT NULL,grant_id TEXT NOT NULL REFERENCES mcp_grants(id) ON DELETE CASCADE,access_expires_at BIGINT NOT NULL,refresh_expires_at BIGINT NOT NULL,used_at BIGINT);
-    CREATE INDEX IF NOT EXISTS mcp_tokens_grant ON mcp_tokens(grant_id);`);
+    CREATE TABLE IF NOT EXISTS api_access(user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,enabled BOOLEAN NOT NULL DEFAULT FALSE,project_ids JSONB NOT NULL DEFAULT '[]',token_hash TEXT UNIQUE,created_at BIGINT);
+    DROP TABLE IF EXISTS mcp_tokens,mcp_codes,mcp_requests,mcp_grants,mcp_clients;`);
   },migrationPool);
  }catch(error){await pool.end();throw error;}finally{if(migrationPool!==pool)await migrationPool.end();}
  let closing;

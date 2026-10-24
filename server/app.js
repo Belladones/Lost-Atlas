@@ -2,7 +2,7 @@ import sharp from 'sharp';
 import {z} from 'zod';
 import {settingsSchema,defaultSettings} from '../shared/settings.js';
 import {createOAuth} from './oauth.js';
-import {createMcp} from './mcp.js';
+import {createReadApi} from './read-api.js';
 import {projectTheme} from './project-theme.js';
 import {mediaIds} from '../shared/media.js';
 import {createServer} from 'node:http';
@@ -15,7 +15,7 @@ import {credentialsSchema,librarySchema} from '../shared/schema.js';
 const scrypt=promisify(scryptCallback);
 const digest=s=>createHash('sha256').update(s).digest('hex');
 const DAY=86400000;
-export async function createApp({databaseUrl=process.env.DATABASE_URL,databaseUrlUnpooled=databaseUrl===process.env.DATABASE_URL?process.env.DATABASE_URL_UNPOOLED:undefined,schema,production=false,appOrigin,dist=resolve('dist'),now=Date.now,imageQuotaBytes=50*1024*1024,oauthEnv=process.env,oauthFetch=globalThis.fetch,themeImageLoader,mcpRedirectUris=process.env.MCP_REDIRECT_URIS||''}={}){
+export async function createApp({databaseUrl=process.env.DATABASE_URL,databaseUrlUnpooled=databaseUrl===process.env.DATABASE_URL?process.env.DATABASE_URL_UNPOOLED:undefined,schema,production=false,appOrigin,dist=resolve('dist'),now=Date.now,imageQuotaBytes=50*1024*1024,oauthEnv=process.env,oauthFetch=globalThis.fetch,themeImageLoader}={}){
  const db=await createDatabase({connectionString:databaseUrl,migrationConnectionString:databaseUrlUnpooled,schema});
  const attempts=new Map();
  const cookie=(token,maxAge)=>`atlas_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${production?'; Secure':''}`;
@@ -24,12 +24,13 @@ export async function createApp({databaseUrl=process.env.DATABASE_URL,databaseUr
  function json(res,status,body){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(body));}
  async function body(req){let size=0,chunks=[];for await(const chunk of req){size+=chunk.length;if(size>5*1024*1024)throw {status:413,message:'Bibliothèque trop volumineuse (limite : 5 Mo).'};chunks.push(chunk);}try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw {status:400,message:'JSON invalide.'};}}
  const handleOAuth=createOAuth({db,appOrigin,production,now,openSession,json,env:oauthEnv,fetch:oauthFetch});
- const mcp=createMcp({db,appOrigin,production,now,json,body,redirectUris:mcpRedirectUris});
+ const readApi=createReadApi({db,now,json,body});
  const server=createServer(async(req,res)=>{
   res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options','DENY');
   try{
    const url=new URL(req.url,'http://localhost');const path=url.pathname;
-   if(await mcp.handlePublic(req,res,path))return;
+   if(await readApi.handlePublic(req,res,url))return;
+   if(['/mcp','/authorize','/token','/register','/revoke'].includes(path)||path.startsWith('/.well-known/'))return json(res,404,{error:'Route inconnue.'});
    if(path.startsWith('/api/')){
     if(await handleOAuth(req,res,path))return;
     if(!['GET','HEAD','OPTIONS'].includes(req.method)){
@@ -57,7 +58,7 @@ export async function createApp({databaseUrl=process.env.DATABASE_URL,databaseUr
      await openSession(res,user.id);return json(res,200,{user:{id:user.id,email:user.email,name:user.name,canChangePassword:!(await db.query('SELECT 1 FROM oauth_identities WHERE user_id=$1',[user.id])).rowCount}});
     }
     const user=await session(req);if(!user)return json(res,401,{error:'Connectez-vous pour accéder à votre atelier.'});
-    if(await mcp.handleAccount(req,res,path,user))return;
+    if(await readApi.handleAccount(req,res,path,user))return;
     if(path==='/api/account'&&req.method==='PUT'){
      const parsed=z.object({name:credentialsSchema.shape.name.unwrap()}).strict().safeParse(await body(req));
      if(!parsed.success)return json(res,400,{error:'Indiquez un nom de 1 à 100 caractères.'});
