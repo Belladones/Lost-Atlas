@@ -22,3 +22,21 @@ test('les flèches des boucles restent à l’extérieur des grands nœuds sur m
  const radius=65,paths=edgePaths({id:'a',x:0,y:0},{id:'a',x:0,y:0},0,radius);
  for(const path of [paths.forward,paths.reverse]){const numbers=path.match(/-?\d+(?:\.\d+)?/g).map(Number);assert.ok(Math.hypot(numbers[0],numbers[1])>radius);assert.ok(Math.hypot(numbers.at(-2),numbers.at(-1))>radius);}
 });
+test('les voisins sont plus proches que les extrémités éloignées d’une chaîne',()=>{
+ const entities=Array.from({length:8},(_,i)=>({id:String(i)})),relations=entities.slice(1).map((e,i)=>({from:String(i),to:e.id}));
+ const nodes=layoutGraph(entities,relations),distance=(a,b)=>Math.hypot(nodes[a].x-nodes[b].x,nodes[a].y-nodes[b].y);
+ const mean=relations.reduce((sum,_,i)=>sum+distance(i,i+1),0)/relations.length;
+ assert.ok(distance(0,7)>mean*2);
+ for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++)assert.ok(distance(i,j)>180);
+});
+test('le placement est stable malgré l’ordre, les doublons et les liens invalides',()=>{
+ const entities=['a','b','c','d'].map(id=>({id})),relations=[{from:'a',to:'b'},{from:'b',to:'c'}];
+ const positions=nodes=>Object.fromEntries(nodes.map(({id,x,y})=>[id,{x,y}]));
+ assert.deepEqual(positions(layoutGraph(entities,relations)),positions(layoutGraph([...entities].reverse(),[...relations].reverse().concat({from:'b',to:'a'},{from:'a',to:'missing'},{from:'a',to:'a'}))));
+});
+test('les groupes indépendants et les fiches isolées ne se chevauchent pas',()=>{
+ const entities=['a','b','c','d','e'].map(id=>({id})),nodes=layoutGraph(entities,[{from:'a',to:'b'},{from:'c',to:'d'}]);
+ const bounds=ids=>{const group=nodes.filter(n=>ids.includes(n.id));return {left:Math.min(...group.map(n=>n.x))-120,right:Math.max(...group.map(n=>n.x))+120,top:Math.min(...group.map(n=>n.y))-80,bottom:Math.max(...group.map(n=>n.y))+100};};
+ const boxes=[bounds(['a','b']),bounds(['c','d']),bounds(['e'])];
+ for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){const a=boxes[i],b=boxes[j];assert.ok(a.right<b.left||b.right<a.left||a.bottom<b.top||b.bottom<a.top);}
+});

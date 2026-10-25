@@ -1,15 +1,65 @@
 export const GRAPH_WIDTH=1100,GRAPH_HEIGHT=660;
+// Work with unique, undirected links: viewpoints and duplicate relations must not
+// change the geometry. Sorting IDs makes the layout independent of list order.
 export function layoutGraph(entities,relations){
  if(!entities.length)return [];
- if(entities.length===1)return [{...entities[0],x:0,y:0}];
- const degrees=new Map(entities.map(e=>[e.id,0]));
- for(const r of relations){if(degrees.has(r.from))degrees.set(r.from,degrees.get(r.from)+1);if(degrees.has(r.to))degrees.set(r.to,degrees.get(r.to)+1);}
- const hub=entities.reduce((best,e)=>(degrees.get(e.id)>degrees.get(best.id)?e:best),entities[0]);
- const center=entities.length>2&&degrees.get(hub.id)>=2?hub.id:null;
- const orbit=entities.filter(e=>e.id!==center),radius=Math.max(200,orbit.length*26);
- const result=orbit.map((e,i)=>{const angle=-Math.PI/2+2*Math.PI*i/orbit.length;return {...e,x:Math.cos(angle)*radius,y:Math.sin(angle)*radius};});
- if(center)result.unshift({...hub,x:0,y:0});
- return result;
+ const ordered=[...entities].sort((a,b)=>String(a.id).localeCompare(String(b.id),'en'));
+ const adjacency=new Map(ordered.map(e=>[e.id,new Set()]));
+ for(const {from,to} of relations){
+  if(from===to||!adjacency.has(from)||!adjacency.has(to))continue;
+  adjacency.get(from).add(to);adjacency.get(to).add(from);
+ }
+ const seen=new Set(),components=[];
+ for(const entity of ordered){
+  if(seen.has(entity.id))continue;
+  const ids=[entity.id];seen.add(entity.id);
+  for(let i=0;i<ids.length;i++)for(const id of [...adjacency.get(ids[i])].sort())if(!seen.has(id)){seen.add(id);ids.push(id);}
+  components.push(ids);
+ }
+ components.sort((a,b)=>b.length-a.length);
+ const positions=new Map(),boxes=[];
+ for(const ids of components){
+  const index=new Map(ids.map((id,i)=>[id,i])),count=ids.length;
+  const depths=new Map([[ids[0],0]]),levels=new Map();
+  for(const id of ids){const depth=depths.get(id);for(const next of adjacency.get(id))if(!depths.has(next))depths.set(next,depth+1);if(!levels.has(depth))levels.set(depth,[]);levels.get(depth).push(id);}
+  const nodes=ids.map(id=>{const depth=depths.get(id),level=levels.get(depth);return {id,x:depth*270,y:(level.indexOf(id)-(level.length-1)/2)*260};});
+  const links=[];
+  for(let i=0;i<count;i++)for(const id of adjacency.get(ids[i]))if(index.get(id)>i)links.push([i,index.get(id)]);
+  // A cooling force simulation keeps neighbours close while leaving space for
+  // portraits and labels. Each connected component is solved independently.
+  for(let step=0;step<240&&count>1;step++){
+   const forces=nodes.map(()=>({x:0,y:0}));
+   for(let i=0;i<count;i++)for(let j=i+1;j<count;j++){
+    const dx=nodes[i].x-nodes[j].x,dy=nodes[i].y-nodes[j].y,distance=Math.max(1,Math.hypot(dx,dy));
+    const strength=18000/(distance*distance)+Math.max(0,245-distance)*.25;
+    const fx=dx/distance*strength,fy=dy/distance*strength;
+    forces[i].x+=fx;forces[i].y+=fy;forces[j].x-=fx;forces[j].y-=fy;
+   }
+   for(const [i,j] of links){
+    const dx=nodes[j].x-nodes[i].x,dy=nodes[j].y-nodes[i].y,distance=Math.max(1,Math.hypot(dx,dy));
+    const strength=(distance-270)*.045,fx=dx/distance*strength,fy=dy/distance*strength;
+    forces[i].x+=fx;forces[i].y+=fy;forces[j].x-=fx;forces[j].y-=fy;
+   }
+   const temperature=22*(1-step/240)+.2;
+   for(let i=0;i<count;i++){
+    const f=forces[i],length=Math.max(1,Math.hypot(f.x,f.y)),scale=Math.min(1,temperature/length);
+    nodes[i].x+=f.x*scale;nodes[i].y+=f.y*scale;
+   }
+  }
+  const left=Math.min(...nodes.map(n=>n.x)),top=Math.min(...nodes.map(n=>n.y));
+  const width=Math.max(...nodes.map(n=>n.x))-left+280,height=Math.max(...nodes.map(n=>n.y))-top+220;
+  boxes.push({nodes,left,top,width,height});
+ }
+ // Pack disconnected groups with a clear gutter, including isolated entities.
+ const targetWidth=Math.max(...boxes.map(b=>b.width),Math.sqrt(boxes.reduce((sum,b)=>sum+b.width*b.height,0)*1.6));
+ let x=0,y=0,rowHeight=0;
+ for(const box of boxes){
+  if(x>0&&x+box.width>targetWidth){x=0;y+=rowHeight+100;rowHeight=0;}
+  for(const node of box.nodes)positions.set(node.id,{x:node.x-box.left+x+140,y:node.y-box.top+y+110});
+  x+=box.width+100;rowHeight=Math.max(rowHeight,box.height);
+ }
+ const all=[...positions.values()],cx=(Math.min(...all.map(n=>n.x))+Math.max(...all.map(n=>n.x)))/2,cy=(Math.min(...all.map(n=>n.y))+Math.max(...all.map(n=>n.y)))/2;
+ return entities.map(e=>({...e,x:positions.get(e.id).x-cx,y:positions.get(e.id).y-cy}));
 }
 export function fitGraph(nodes,width=GRAPH_WIDTH,height=GRAPH_HEIGHT){
  if(!nodes.length)return {x:0,y:0,scale:1};
