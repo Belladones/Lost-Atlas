@@ -9,3 +9,10 @@
 .unavailable-image{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;min-height:175px;background:radial-gradient(ellipse,var(--theme-383323,#383323),var(--theme-191912,#191912));color:var(--theme-a08c67,#a08c67)}
 .image-lightbox .unavailable-image{min-height:260px;min-width:min(60vw,360px)}
 @media(max-width:650px){.profile-gallery .unavailable-image{min-height:140px}}
+
+.framing-controls{margin:12px 0;padding:10px;border:1px solid var(--theme-4e412b,#4e412b)}
+.modal .framing-controls label{display:block;margin:8px 0;font-size:11px}
+.framing-controls output{float:right;font-variant-numeric:tabular-nums}
+.modal .framing-controls input[type=range]{display:block;width:100%;padding:0;margin:8px 0;accent-color:#c7ab78}
+.framing-controls button{font-size:11px}
+.gallery-preview,.relation-avatar{overflow:hidden}
