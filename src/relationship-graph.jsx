@@ -2,7 +2,7 @@ import React,{useEffect,useId,useMemo,useRef,useState} from 'react';
 import {ZoomIn,ZoomOut,Maximize,Move,Target,RotateCcw} from 'lucide-react';
 import {layoutGraph,graphEdges,fitGraph,GRAPH_WIDTH,GRAPH_HEIGHT} from './graph-layout';
 import {SafeImage} from './image-view';
-const colors={Personnage:'#d0b98e',Lieu:'#88ac9a',Organisation:'#a69ab8'};
+const colors={Personnage:'#d0b98e',Lieu:'#88ac9a',Organisation:'#a69ab8',Créature:'#87bacb'};
 const shorten=(s,length=28)=>s.length>length?s.slice(0,length-1)+'…':s;
 export function RelationshipGraph({project,selection,onSelect,query}){
  const prefix=useId().replace(/[^a-zA-Z0-9]/g,''),svg=useRef(null),drag=useRef(null),suppressClick=useRef(false);

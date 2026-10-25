@@ -206,6 +206,7 @@ Envoyez `Authorization: Bearer TOKEN` à chaque requête HTTPS. Ne placez pas le
 | `/api/v1/projects` | Projets autorisés : identifiant, nom, genre, description |
 | `/api/v1/projects/:id/characters` | Personnages et leurs champs détaillés |
 | `/api/v1/projects/:id/organizations` | Organisations |
+| `/api/v1/projects/:id/creatures` | Créatures |
 | `/api/v1/projects/:id/places` | Lieux |
 | `/api/v1/projects/:id/relations` | Relations, identifiants et noms des deux fiches |
 | `/api/v1/projects/:id/chapters` | Chapitres avec texte intégral, statut et position dans le manuscrit |
@@ -253,11 +254,11 @@ Les titres de chapitre n’apparaissent qu’au début de chaque chapitre, et le
 
 ## Importer des fiches et des chapitres
 
-Dans **Encyclopédie → Importer des éléments** ou **Manuscrit → Importer des chapitres**, sélectionnez Personnage, Lieu, Organisation ou Chapitre et téléchargez son modèle CSV. Remplacez la ligne d’exemple par vos données, en conservant les en-têtes, puis exportez en **CSV UTF-8** depuis votre tableur. Les séparateurs point-virgule et virgule, les cellules entre guillemets et les textes sur plusieurs lignes sont pris en charge. Le modèle personnage comprend les champs détaillés de sa fiche.
+Dans **Encyclopédie → Importer des éléments** ou **Manuscrit → Importer des chapitres**, sélectionnez Personnage, Lieu, Organisation, Créature ou Chapitre et téléchargez son modèle CSV. Remplacez la ligne d’exemple par vos données, en conservant les en-têtes, puis exportez en **CSV UTF-8** depuis votre tableur. Les séparateurs point-virgule et virgule, les cellules entre guillemets et les textes sur plusieurs lignes sont pris en charge. Le modèle personnage comprend les champs détaillés de sa fiche.
 
-Le modèle personnage comprend aussi jusqu’à dix relations par ligne. Renseignez `relation_cible` (nom exact d’une fiche ou identifiant), `relation_libelle`, puis éventuellement `relation_description` et `relation_description_inverse`. Le premier texte explique le lien du personnage importé vers la cible, le second le sens inverse. Répétez avec les suffixes `_2` à `_10` pour ajouter plusieurs liens. Les colonnes inutilisées peuvent être laissées vides ou supprimées.
+Tous les modèles de fiches comprennent aussi jusqu’à dix relations par ligne. Renseignez `relation_cible` (nom exact d’une fiche ou identifiant), `relation_libelle`, puis éventuellement `relation_description` et `relation_description_inverse`. Le premier texte explique le lien de la fiche importée vers la cible, le second le sens inverse. Répétez avec les suffixes `_2` à `_10` pour ajouter plusieurs liens. Les colonnes inutilisées peuvent être laissées vides ou supprimées.
 
-La cible peut être un personnage, un lieu ou une organisation du projet, ou un autre personnage du même import, même situé après dans le fichier. Les noms sont comparés sans tenir compte des majuscules ; utilisez un identifiant en cas de noms identiques. Une cible absente ou ambiguë bloque tout l’import et apparaît dans l’aperçu. Les relations des lignes ignorées comme doublons ne sont pas ajoutées. Les relations déjà présentes sont conservées.
+La cible peut être un personnage, un lieu, une organisation ou une créature du projet, ou une autre fiche du même import, même situé après dans le fichier. Les noms sont comparés sans tenir compte des majuscules ; utilisez un identifiant en cas de noms identiques. Une cible absente ou ambiguë bloque tout l’import et apparaît dans l’aperçu. Les relations des lignes ignorées comme doublons ne sont pas ajoutées. Les relations déjà présentes sont conservées.
 
 Exemple minimal :
 
@@ -273,3 +274,13 @@ Seuls `nom` (fiches) et `titre` (chapitres) sont obligatoires ; les colonnes fac
 Choisissez le fichier, consultez l’aperçu et confirmez l’ajout au projet actif. Les noms ou titres déjà présents dans le même type sont signalés et ignorés par défaut, y compris les répétitions dans le fichier ; décochez l’option pour les conserver comme nouveaux éléments. Aucun élément existant n’est remplacé. Les chapitres sont ajoutés à la fin, dans l’ordre des lignes. Annuler ou fournir un fichier invalide n’ajoute rien.
 
 Limites : **200 éléments et 2 Mo par fichier**, dans les limites habituelles du projet et de la bibliothèque. Un seul élément invalide bloque le fichier entier avec un message indiquant la ligne de données concernée. L’import validé utilise l’enregistrement automatique habituel du compte.
+
+
+Les modèles **Organisation** et **Créature** incluent des propriétés détaillées, facultatives :
+
+- Organisation : `mission`, `facade_publique`, `doctrine`, `histoire`, `implantation`, `direction`, `membres`, `ressources`, `programmes_secrets`, `methodes`, `influence`, `secrets`, `conflits`.
+- Créature : `espece`, `origine`, `habitat`, `taille`, `apparence`, `anatomie`, `perception`, `comportement`, `communication`, `capacites`, `limites`, `vulnerabilites`, `cycle_de_vie`, `lien_aux_humains`, `enjeux_narratifs`.
+
+Ces propriétés sont conservées dans les champs libres de la fiche, affichées dans ses détails et éditables dans l’onglet **Détails**. Les longues descriptions peuvent contenir des retours à la ligne : entourez alors la cellule de guillemets dans le CSV. Les modèles reprennent le MHI et les Néréides comme exemples fictifs.
+
+Tous les types de fiches (personnage, lieu, organisation, créature) acceptent les dix groupes de colonnes de relations. Les cibles doivent exister dans le projet ou dans les lignes retenues du même import ; pour relier deux types importés séparément, importez d’abord la fiche cible. Les créatures participent au graphe, aux mentions, aux sauvegardes et à l’API en lecture seule (`creatures`).

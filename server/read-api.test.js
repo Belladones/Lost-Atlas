@@ -9,7 +9,7 @@ test('API : activation explicite, sélection privée, lecture seule, rotation et
  const req=(path,method='GET',data,headers={})=>fetch(base+path,{method,headers:{'Content-Type':'application/json',...headers},...(data?{body:JSON.stringify(data)}:{})});
  const register=async email=>{const r=await req('/api/auth/register','POST',{email,name:'Auteur',password:'password test 123'});const user=(await r.json()).user;return {user,headers:{Cookie:r.headers.get('set-cookie').split(';')[0]}};};
  const a=await register('api-a@example.test'),b=await register('api-b@example.test');
- const project=id=>({id,name:id,entities:[{id:'c',name:'Cassie',type:'Personnage',alias:'C',description:'Personnage'},{id:'l',name:'Paris',type:'Lieu',alias:'',description:'Lieu'},{id:'o',name:'Guilde',type:'Organisation',alias:'',description:'Organisation'}],relations:[{from:'c',to:'o',label:'membre'}],chapters:[{id:'ch',title:'Début',text:'Texte privé',status:'En cours'}]});
+ const project=id=>({id,name:id,entities:[{id:'c',name:'Cassie',type:'Personnage',alias:'C',description:'Personnage'},{id:'l',name:'Paris',type:'Lieu',alias:'',description:'Lieu'},{id:'n',name:'Néréide',type:'Créature',alias:'Bleue',description:'Créature',customFields:[{id:'detail-habitat',label:'Habitat',value:'Eaux souterraines'}]},{id:'o',name:'Guilde',type:'Organisation',alias:'',description:'Organisation'}],relations:[{from:'c',to:'o',label:'membre'}],chapters:[{id:'ch',title:'Début',text:'Texte privé',status:'En cours'}]});
  await req('/api/library','PUT',{data:{projects:[project('allowed'),project('hidden')],active:'allowed'},revision:0},a.headers);
  await req('/api/library','PUT',{data:{projects:[project('foreign')],active:'foreign'},revision:0},b.headers);
  const settings='/api/account/api-access',endpoint='/api/v1/projects';
@@ -23,7 +23,7 @@ test('API : activation explicite, sélection privée, lecture seule, rotation et
  const row=(await app.db.query('SELECT token_hash FROM api_access WHERE user_id=$1',[a.user.id])).rows[0];assert.notEqual(row.token_hash,token);assert.equal(row.token_hash.length,64);
  const state=await(await req(settings,'GET',null,a.headers)).json();assert.equal(state.hasToken,true);assert.equal(JSON.stringify(state).includes(token),false);
  assert.deepEqual((await(await req(endpoint,'GET',null,auth)).json()).items.map(p=>p.id),['allowed']);
- for(const [route,name] of [['characters','Cassie'],['places','Paris'],['organizations','Guilde']])assert.equal((await(await req(endpoint+'/allowed/'+route,'GET',null,auth)).json()).items[0].name,name);
+ for(const [route,name] of [['characters','Cassie'],['places','Paris'],['organizations','Guilde'],['creatures','Néréide']])assert.equal((await(await req(endpoint+'/allowed/'+route,'GET',null,auth)).json()).items[0].name,name);
  assert.equal((await(await req(endpoint+'/allowed/relations','GET',null,auth)).json()).items[0].toName,'Guilde');
  assert.equal((await(await req(endpoint+'/allowed/chapters','GET',null,auth)).json()).items[0].text,'Texte privé');
  for(const id of ['hidden','foreign'])assert.equal((await req(endpoint+'/'+id+'/chapters','GET',null,auth)).status,404);

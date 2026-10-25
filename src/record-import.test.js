@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {importTypes,importTemplate,readRecordImport,parseCsv,planRecordImport,appendRecordImport} from './record-import.js';
 import {initial} from './model.js';
-test('les quatre modèles se réimportent avec des identifiants neufs et des champs adaptés',()=>{
+test('les cinq modèles se réimportent avec des identifiants neufs et des champs adaptés',()=>{
  for(const type of importTypes){const template=importTemplate(type),a=readRecordImport(template,type),b=readRecordImport(template,type);assert.equal(a.length,1);assert.notEqual(a[0].id,b[0].id);if(type==='Chapitre'){assert.equal(a[0].status,'Idée');assert.ok(a[0].text.includes('\n\n'));}else assert.equal(a[0].type,type);if(type==='Personnage'){assert.equal(a[0].character.age,'28');assert.equal(a[0].character.pronouns,'elle');}}
 });
 test('CSV point-virgule, virgule, BOM, guillemets échappés et retours à la ligne',()=>{
@@ -38,4 +38,22 @@ test('les relations respectent les doublons ignorés et restent limitées au pro
  const selected=planRecordImport(project,'Personnage',readRecordImport(csv,'Personnage')).filter(p=>!p.skip).map(p=>p.record);
  const next=appendRecordImport(data,project.id,'Personnage',selected);assert.equal(next.projects[0].relations.length,project.relations.length+1);assert.equal(next.projects[0].relations.at(-1).to,target.id);
  const foreign=readRecordImport('nom;relation_cible;relation_libelle\nAutre;Étranger;Ami','Personnage');data.projects.push({...structuredClone(project),id:'foreign',entities:[{...target,id:'foreign-person',name:'Étranger'}],relations:[]});assert.throws(()=>appendRecordImport(data,project.id,'Personnage',foreign),/introuvable/);
+});
+
+test('importe les détails du MHI et des Néréides sans perdre les relations entre types',()=>{
+ const data=structuredClone(initial),project=data.projects[0];
+ const org=readRecordImport('nom;mission;facade_publique;programmes_secrets;secrets;description\nMHI;Réparer le vivant;Médecine;CONTINUITÉ;Expériences clandestines;"Une présentation\nsur deux lignes"','Organisation');
+ const next=appendRecordImport(data,project.id,'Organisation',org);
+ assert.equal(next.projects[0].entities.at(-1).customFields.find(f=>f.id==='detail-programmes_secrets').value,'CONTINUITÉ');
+ assert.equal(next.projects[0].entities.at(-1).description,'Une présentation\nsur deux lignes');
+ const creatures=readRecordImport('nom;alias;habitat;capacites;limites;vulnerabilites;relation_cible;relation_libelle;relation_description;relation_description_inverse\nNéréides;Les Bleues;Eaux souterraines;Régénération;Épuisement;Chlore;MHI;Exploitation;Elles sont retenues;Il les étudie','Créature');
+ const final=appendRecordImport(next,project.id,'Créature',creatures),p=final.projects[0],creature=p.entities.at(-1),relation=p.relations.at(-1);
+ assert.equal(creature.type,'Créature');assert.equal(creature.customFields.find(f=>f.id==='detail-vulnerabilites').value,'Chlore');
+ assert.equal(relation.from,creature.id);assert.equal(relation.to,org[0].id);assert.equal(relation.toDescription,'Il les étudie');
+ assert.equal(data.projects[0].entities.length,project.entities.length);
+});
+test('valide la longueur des propriétés détaillées et les cibles des organisations',()=>{
+ assert.throws(()=>readRecordImport('nom;mission\nMHI;'+ 'x'.repeat(10001),'Organisation'),/invalide ou trop long/);
+ const data=structuredClone(initial),project=data.projects[0],records=readRecordImport('nom;relation_cible;relation_libelle\nMHI;Absente;Étudie','Organisation');
+ assert.throws(()=>appendRecordImport(data,project.id,'Organisation',records),/introuvable/);
 });

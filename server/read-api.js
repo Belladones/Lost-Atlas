@@ -43,12 +43,12 @@ export function createReadApi({db,now,json,body}){
   let items;
   if(path==='/api/v1/projects')items=available.map(p=>({id:p.id,name:p.name,genre:p.genre,description:p.description}));
   else{
-   const match=path.match(/^\/api\/v1\/projects\/([^/]+)\/(characters|organizations|places|relations|chapters)$/);
+   const match=path.match(/^\/api\/v1\/projects\/([^/]+)\/(characters|organizations|creatures|places|relations|chapters)$/);
    if(!match){json(res,404,{error:'Route inconnue.'});return true;}
    let id;try{id=decodeURIComponent(match[1]);}catch{json(res,400,{error:'Identifiant invalide.'});return true;}
    const project=available.find(p=>p.id===id);
    if(!project){json(res,404,{error:'Projet introuvable ou non autorisé.'});return true;}
-   const type={characters:'Personnage',organizations:'Organisation',places:'Lieu'}[match[2]];
+   const type={characters:'Personnage',organizations:'Organisation',creatures:'Créature',places:'Lieu'}[match[2]];
    if(type)items=project.entities.filter(e=>e.type===type).map(({id,name,alias,type,role,description,symbol,character,customFields})=>({id,name,alias,type,role,description,symbol,character,customFields}));
    else if(match[2]==='chapters')items=project.chapters.map(({id,title,text,status},index)=>({id,title,text,status,position:index+1}));
    else items=project.relations.map(r=>({...r,fromName:project.entities.find(e=>e.id===r.from)?.name,toName:project.entities.find(e=>e.id===r.to)?.name}));
